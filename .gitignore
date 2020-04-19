@@ -1,0 +1,4 @@
+*.csx
+paket.targets
+downloads
+paket-files
