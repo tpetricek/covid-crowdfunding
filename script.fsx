@@ -85,8 +85,8 @@ let rec downloadVirginFundraisers kvd i = seq {
 let (|CssSelect|) css (fd:HtmlDocument) =
   fd.CssSelect(css)
 let (|ByTagAndId|_|) (tag,id) (fd:HtmlDocument) = 
-  fd.CssSelect("input") |> Seq.tryFind (fun i ->
-    (i.AttributeValue("id").Trim() = "fundraiserPageActivityId") )
+  fd.CssSelect(tag) |> Seq.tryFind (fun i ->
+    (i.AttributeValue("id").Trim() = id) )
 
 type Fundraiser = 
   { Fundraiser : string 
@@ -104,15 +104,18 @@ let toDateTime (timestamp:int64) =
   let start = DateTime(1970,1,1,0,0,0,DateTimeKind.Utc)
   start.AddSeconds(float (timestamp / 1000L)).ToLocalTime()
 
-let kvd, fname = "food bank", "food_bank.csv"
+//let kvd, fname = "food bank", "food_bank.csv"
+//let kvd, fname = "foodbank", "foodbank.csv"
+let kvd, fname = "homeless", "homeless.csv"
+
 let fundraisers = ResizeArray<_>()
 
 for f in downloadVirginFundraisers kvd 0 do 
   let p = virginFundraiserDetail f.DisplayPageUrl
   match virginFundraiserDetail f.DisplayPageUrl with 
   | Some 
-      ( ByTagAndId ("input", "#fundraiserPageActivityId") pageid & 
-        ByTagAndId ("input", "#totalDonationInputHidden") don ) ->
+      ( ByTagAndId ("input", "fundraiserPageActivityId") pageid & 
+        ByTagAndId ("input", "totalDonationInputHidden") don ) ->
       let raised = don.Attribute("value").Value() |> float
       let dons = virginDonations (int (pageid.AttributeValue("value"))) 
   
