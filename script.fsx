@@ -15,6 +15,10 @@ open System.IO
 let temp = __SOURCE_DIRECTORY__ + "/downloads"
 Directory.CreateDirectory(temp)
 
+// --------------------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------------------
+
 let downloadCompressed (url:string) = 
   let fn = temp + "/" + HttpUtility.UrlEncode(url)
   if not (File.Exists(fn)) then 
@@ -25,6 +29,10 @@ let downloadCompressed (url:string) =
     use sr = new StreamReader(resp.GetResponseStream())
     File.WriteAllText(fn, sr.ReadToEnd())
   File.ReadAllText(fn)
+
+// --------------------------------------------------------------------------------------
+// Charity search
+// --------------------------------------------------------------------------------------
 
 type CharitySearch = WsdlService<"https://apps.charitycommission.gov.uk/Showcharity/API/SearchCharitiesV1/SearchCharitiesV1.asmx">
 type FetchCharity = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/charity.json")>
@@ -41,6 +49,10 @@ let fetchCharity id =
     File.WriteAllText(fn, sw.ToString())
   File.ReadAllText(fn) |> FetchCharity.Parse
   
+// --------------------------------------------------------------------------------------
+// Virgin scraping
+// --------------------------------------------------------------------------------------
+
 type VirginFunraisers = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/virgin-fundraisers.json")>
 type VirginDonation = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/virgin-donation.json")>
 
@@ -104,9 +116,14 @@ let toDateTime (timestamp:int64) =
   let start = DateTime(1970,1,1,0,0,0,DateTimeKind.Utc)
   start.AddSeconds(float (timestamp / 1000L)).ToLocalTime()
 
+// --------------------------------------------------------------------------------------
+// Virgin fundraisers
+// --------------------------------------------------------------------------------------
+
 //let kvd, fname = "food bank", "food_bank.csv"
 //let kvd, fname = "foodbank", "foodbank.csv"
 let kvd, fname = "homeless", "homeless.csv"
+
 
 let fundraisers = ResizeArray<_>()
 
@@ -163,7 +180,125 @@ for f in downloadVirginFundraisers kvd 0 do
 let df = Frame.ofRecords fundraisers
 df.SaveCsv(__SOURCE_DIRECTORY__ + "/outputs/" + fname)
 
+// --------------------------------------------------------------------------------------
+// GoFundMe
+// --------------------------------------------------------------------------------------
+
+type GoFundDonations = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/gofund-donations.json")>
+
+let goFundSearchPage page term country = 
+  let raw = 
+    sprintf "https://www.gofundme.com/mvc.php?route=homepage_norma/load_more&page=%d&term=%s&country=%s&postalCode=&locationText="
+      page term country |> downloadCompressed
+  HtmlDocument.Parse("<html><body>" + raw + "</body></html>")
+
+let goFundSearch term country = 
+  let rec loop p = seq {
+    let doc = goFundSearchPage p term country
+    let camps = doc.CssSelect(".react-campaign-tile")  
+    for campaign in camps do
+      let title = campaign.CssSelect(".fund-title").[0].InnerText()
+      let url = campaign.CssSelect("a").[0].Attribute("href").Value()
+      let location = campaign.CssSelect(".fund-location").[0].InnerText()
+      yield title, url, location
+    if camps.Length > 0 then yield! loop (p+1) }
+  loop 1
+
+let goFundDonations id = 
+  let rec loop offset = seq {
+    let funds = 
+      sprintf "https://gateway.gofundme.com/web-gateway/v1/feed/%s/donations?limit=100&offset=%d&sort=recent" id offset
+      |> downloadCompressed 
+      |> GoFundDonations.Parse
+    if funds.References.Donations.Length > 0 then
+      yield! funds.References.Donations
+      yield! loop (offset + 100) }
+  loop 0
+
+let goFundDetails url = 
+  let doc = try downloadCompressed url |> HtmlDocument.Parse |> Some with :? System.Net.WebException -> None
+  match doc with 
+  | None -> None
+  | Some doc ->
+//  printfn "%s" url
+  if doc.CssSelect(".a-created-date").Length = 0 then None else
+  let created = doc.CssSelect(".a-created-date").[0].InnerText().Replace("Created ", "")
+  let created = 
+    if created.EndsWith " days ago" then DateTime.Today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
+    elif created.EndsWith " day ago" then DateTime.Today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
+    elif created.EndsWith " hours ago" then DateTime.Today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
+    elif created.EndsWith " hour ago" then DateTime.Today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
+    else DateTime.Parse created
+  let story = doc.CssSelect(".o-campaign-story").[0].InnerText()
+  let org = doc.CssSelect(".m-organization-info-content-child")
+  let org = if List.length org < 2 then "", "" else org.[0].InnerText(), org.[1].InnerText()
+
+  let prog = doc.CssSelect(".m-progress-meter-heading")
+  let l1 = prog.[0].DirectInnerText()
+  let l2 = prog.CssSelect("span").[0].DirectInnerText()
+  let intp (s:string) = int (s.Replace("£", "").Replace(",",""))
+  let raised, target = 
+    if l2 = "raised" then intp l1, -1
+    elif l2 = "goal" then 0, intp l1
+    else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", ""))
+
+  let id = url.Replace("https://www.gofundme.com/f/", "")
+  let mrd = goFundDonations id |> Seq.tryHead |> Option.map (fun m -> m.CreatedAt)
+  {| Created=created; Story=story; Organization=fst org; OrganizationDetails=snd org;
+     Raised=raised; Target=target; MostRecentDonation=mrd |} |> Some
+
+let fetchAll term =   
+  let res = 
+    goFundSearch term "" 
+    |> Seq.filter (fun (_, _, l) -> l.Contains "United Kingdom")
+  [ for t, u, l in res do
+      let d = goFundDetails u
+      if d.IsSome then yield {| Title=t; Url=u; Location=l; Details = d.Value |} ] 
+
+let saveAll (all:seq<_>) file =
+  let df = 
+    Frame.ofRecords all
+    |> Frame.expandAllCols 1
+
+  df.ReplaceColumn("Details.MostRecentDonation",
+    df.GetColumn<option<DateTimeOffset>>("Details.MostRecentDonation") |> Series.mapAll (fun _ v -> Option.flatten v))
+
+  let df2 = df.Columns.[[  
+    "Title"
+    "Location"
+    "Url"
+    "Details.Raised"
+    "Details.Target"
+    "Details.MostRecentDonation"
+    "Details.Created"
+    "Details.Organization"
+    "Details.OrganizationDetails"
+    "Details.Story"
+    ]]
+  
+  df2.SaveCsv(__SOURCE_DIRECTORY__ + "/outputs/" + file + ".csv",includeRowKeys=false)
+
+let allFB = fetchAll "foodbank"
+saveAll allFB "gofundme-foodbank"
+  
+let allFsB = fetchAll "food%20bank"
+saveAll allFsB "gofundme-food-bank"
+
+let allSK = fetchAll "soup%20kitchen"
+saveAll allSK "gofundme-soup-kitchen"
+
+let allH = fetchAll "homeless"
+saveAll allH "gofundme-homeless"
+
+Set.intersect
+  (set [ for f in allFB -> f.Url ])
+  (set [ for f in allFsB -> f.Url ])
+|> Seq.length
+
+allFB |> Seq.length
+allFsB |> Seq.length
 //let ch = fetchCharity 210667
+
   //ch.
 
 (*
