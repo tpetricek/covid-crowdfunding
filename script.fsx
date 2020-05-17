@@ -240,7 +240,6 @@ let goFundDetails url =
   match doc with 
   | None -> None
   | Some doc ->
-//  printfn "%s" url
   if doc.CssSelect(".a-created-date").Length = 0 then None else
   let created = doc.CssSelect(".a-created-date").[0].InnerText().Replace("Created ", "")
   let created = 
@@ -263,15 +262,20 @@ let goFundDetails url =
     else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", ""))
 
   let id = url.Replace("https://www.gofundme.com/f/", "")
-  let mrd = goFundDonations id |> Seq.tryHead |> Option.map (fun m -> m.CreatedAt)
+  let mrd, doncnt = 
+    try
+      goFundDonations id |> Seq.tryHead |> Option.map (fun m -> m.CreatedAt),
+      goFundDonations id |> Seq.length
+    with :? System.Net.WebException as we when we.Message.Contains("404") -> None, -1
   {| Created=created; Story=story; Organization=fst org; OrganizationDetails=snd org;
-     Raised=raised; Target=target; MostRecentDonation=mrd |} |> Some
+     Raised=raised; Target=target; MostRecentDonation=mrd; DonationCount = doncnt |} |> Some
 
 let fetchAll term =   
   let res = 
     goFundSearch term "" 
-    |> Seq.filter (fun (_, _, l) -> l.Contains "United Kingdom")
-  [ for t, u, l in res do
+    |> Seq.filter (fun (_, _, l) -> l.Contains "United Kingdom") |> Array.ofSeq
+  [ for i, (t, u, l) in Seq.indexed res do
+      printfn "SCRAPING (%d/%d): %s" i res.Length u
       let d = goFundDetails u
       if d.IsSome then yield {| Title=t; Url=u; Location=l; Details = d.Value |} ] 
 
@@ -293,6 +297,7 @@ let saveAll (all:seq<_>) file =
     "Details.Created"
     "Details.Organization"
     "Details.OrganizationDetails"
+    "Details.DonationCount"
     "Details.Story"
     ]]
   
@@ -383,9 +388,11 @@ let fetchSupporters id =
     let vars = sprintf """{"type":"FUNDRAISING","slug":"%s","preview":false,"after":"%s"}""" id curs
     let url = qS.Replace("%7B%22type%22%3A%22FUNDRAISING%22%2C%22slug%22%3A%22finleyandnanuk%22%2C%22preview%22%3Afalse%2C%22after%22%3A%22MTA%3D%22%7D", vars)
     let sup = downloadCompressedHash url |> JustSupporters.Parse
-    for d in sup.Data.Page.Donations.Edges do yield d.Node
-    if sup.Data.Page.Donations.PageInfo.HasNextPage then
-      yield! loop sup.Data.Page.Donations.PageInfo.EndCursor }
+    let dons = try Some sup.Data.Page.Donations with _ -> None
+    if dons.IsSome then
+      for d in dons.Value.Edges do yield d.Node
+      if dons.Value.PageInfo.HasNextPage then
+        yield! loop dons.Value.PageInfo.EndCursor }
   loop ""
 
 let fetchJustData kvd fname = 
@@ -398,7 +405,8 @@ let fetchJustData kvd fname =
     srch.GroupedResults.[0].Results |> Seq.filter (fun f -> f.CountryCode = "United Kingdom")
 
   let all = 
-    [ for f in uk ->
+    [ for i, f in Seq.indexed uk do
+        printfn "%d/%d" i (Seq.length uk)
         let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         let d2 = JustDetails2.Parse(downloadCompressedHash (q2.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let d3 = JustDetails3.Parse(downloadCompressedHash (q3.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
@@ -413,23 +421,25 @@ let fetchJustData kvd fname =
         //let dC = JustDetailsC.Parse(downloadCompressedHash (qC.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-  
+        printfn "\nSCRAPING: %s (%s)" f.Name f.Link
         let ch = fetchCharity f.CharityId
 
-        {|  Title = f.Name
-            Link = f.Link
-            CharityName = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].Name
-            CharityId = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].RegistrationNumber
-            CharityAddress = try [ for k, v in ch.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
-            CharityAreaOfOperation = try ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
-            CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
-            MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString()) |> Option.defaultValue "" with _ -> ""
-            Raised = d4.Data.Page.DonationSummary.TotalAmount.Value
-            Target = d6.Data.Page.TargetWithCurrency.Value
-            Owner = d5.Data.Page.Owner.Name
-            Created = d6.Data.Page.CreateDate
-            DonationDetailCount = fetchSupporters (f.LinkPath.Substring(1)) |> Seq.length
-            DonationCount = d8.Data.Page.Donations.TotalCount |} ]
+        if (try ignore(d1.Data.Page); true with _ -> false) then
+          yield 
+           {| Title = f.Name
+              Link = f.Link
+              CharityName = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].Name
+              CharityId = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].RegistrationNumber
+              CharityAddress = try [ for k, v in ch.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
+              CharityAreaOfOperation = try ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
+              CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
+              MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString()) |> Option.defaultValue "" with _ -> ""
+              Raised = d4.Data.Page.DonationSummary.TotalAmount.Value
+              Target = d6.Data.Page.TargetWithCurrency.Value
+              Owner = d5.Data.Page.Owner.Name
+              Created = d6.Data.Page.CreateDate
+              DonationDetailCount = fetchSupporters (f.LinkPath.Substring(1)) |> Seq.length
+              DonationCount = d8.Data.Page.Donations.TotalCount |} ]
   //  all |> Seq.length
   //  all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.sortByDescending snd |> Seq.iter (printfn "%A")
   //  all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.length
