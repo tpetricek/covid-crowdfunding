@@ -12,8 +12,10 @@ open System.Net
 open System.Web
 open System.IO
 
-let temp = __SOURCE_DIRECTORY__ + "/downloads"
+let temp = __SOURCE_DIRECTORY__ + "/cache/2020-05-17"
+let outFolder = __SOURCE_DIRECTORY__ + "/outputs/2020-05-17"
 Directory.CreateDirectory(temp)
+Directory.CreateDirectory(outFolder)
 
 // --------------------------------------------------------------------------------------
 // Helpers
@@ -135,11 +137,7 @@ let toDateTime (timestamp:int64) =
 // Virgin fundraisers
 // --------------------------------------------------------------------------------------
 
-//let kvd, fname = "food bank", "food_bank.csv"
-//let kvd, fname = "foodbank", "foodbank.csv"
-let kvd, fname = "homeless", "homeless.csv"
-
-let doit1() =
+let fetchVirginData kvd fname =
   let fundraisers = ResizeArray<_>()
 
   for f in downloadVirginFundraisers kvd 0 do 
@@ -193,7 +191,14 @@ let doit1() =
     | _ -> ()
 
   let df = Frame.ofRecords fundraisers
-  df.SaveCsv(__SOURCE_DIRECTORY__ + "/outputs/" + fname)
+  df.SaveCsv(outFolder + "/" + fname)
+
+let doitVirgin () = 
+  fetchVirginData "food bank" "virgin_food-bank.csv"
+  fetchVirginData "soup kitchen" "virgin_soup-kitchen.csv"
+  fetchVirginData "foodbank" "virgin_foodbank.csv"
+  fetchVirginData "homeless" "virgin_homeless.csv"
+
 
 // --------------------------------------------------------------------------------------
 // GoFundMe
@@ -291,20 +296,20 @@ let saveAll (all:seq<_>) file =
     "Details.Story"
     ]]
   
-  df2.SaveCsv(__SOURCE_DIRECTORY__ + "/outputs/" + file + ".csv",includeRowKeys=false)
+  df2.SaveCsv(outFolder + "/" + file + ".csv",includeRowKeys=false)
 
-let doit2 () = 
+let doitGoFundMe () = 
   let allFB = fetchAll "foodbank"
-  saveAll allFB "gofundme-foodbank"
+  saveAll allFB "gofundme_foodbank"
   
   let allFsB = fetchAll "food%20bank"
-  saveAll allFsB "gofundme-food-bank"
+  saveAll allFsB "gofundme_food-bank"
 
   let allSK = fetchAll "soup%20kitchen"
-  saveAll allSK "gofundme-soup-kitchen"
+  saveAll allSK "gofundme_soup-kitchen"
 
   let allH = fetchAll "homeless"
-  saveAll allH "gofundme-homeless"
+  saveAll allH "gofundme_homeless"
 
   Set.intersect
     (set [ for f in allFB -> f.Url ])
@@ -336,6 +341,7 @@ let qB = "https://graphql.justgiving.com/?operationName=GetPageCampaignIds&varia
 let qC = "https://graphql.justgiving.com/?operationName=ListTimelineEntries&variables=%7B%22type%22%3A%22FUNDRAISING%22%2C%22slug%22%3A%22fulwood-foodbank-appeal%22%2C%22preview%22%3Afalse%2C%22measurementSystem%22%3A%22METRIC%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%221b3e63a054b9a47be80b9cdfae75f240d93443d79163ee35c2fc4a95dfd7e969%22%7D%7D"
 let qD = "https://graphql.justgiving.com/?variables=%7B%22type%22%3A%22FUNDRAISING%22%2C%22slug%22%3A%22fulwood-foodbank-appeal%22%2C%22preview%22%3Afalse%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%220a24ab8af72dd7ccaf8a5922e4ee5714635dba2aa796bb0defeedbc031693052%22%7D%7D"
 let qE = "https://graphql.justgiving.com/?variables=%7B%22type%22%3A%22FUNDRAISING%22%2C%22slug%22%3A%22fulwood-foodbank-appeal%22%2C%22preview%22%3Afalse%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%227e811938a44d4a74ca07ea107c5b0a8e9ca32b28b5ceeab798bb781520626707%22%7D%7D"
+let qS = "https://graphql.justgiving.com/?operationName=SupportersList&variables=%7B%22type%22%3A%22FUNDRAISING%22%2C%22slug%22%3A%22finleyandnanuk%22%2C%22preview%22%3Afalse%2C%22after%22%3A%22MTA%3D%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22cb07ff9d6a37d17365e726d4aa9a930da3608338824678804ef81aa496dced4e%22%7D%7D"
 
 let saveSamples() = 
   IO.File.WriteAllText(__SOURCE_DIRECTORY__ + "/samples/just-details-q1.json", downloadCompressedHash q1)
@@ -352,6 +358,7 @@ let saveSamples() =
   IO.File.WriteAllText(__SOURCE_DIRECTORY__ + "/samples/just-details-qC.json", downloadCompressedHash qC)
   IO.File.WriteAllText(__SOURCE_DIRECTORY__ + "/samples/just-details-qD.json", downloadCompressedHash qD)
   IO.File.WriteAllText(__SOURCE_DIRECTORY__ + "/samples/just-details-qE.json", downloadCompressedHash qE)
+  IO.File.WriteAllText(__SOURCE_DIRECTORY__ + "/samples/just-details-qS.json", downloadCompressedHash qS)
 
 
 type JustSearch = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/just-search.json")>
@@ -369,82 +376,74 @@ type JustDetailsB = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/just-det
 type JustDetailsC = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/just-details-qC.json")>
 type JustDetailsD = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/just-details-qD.json")>
 type JustDetailsE = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/just-details-qE.json")>
+type JustSupporters = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/just-details-qS.json")>
 
-let srch = 
-  "https://www.justgiving.com/onesearch/query?limit=10000&q=soup+kitchen&i=fundraiser&offset=0"
-  |> downloadCompressed 
-  |> JustSearch.Parse
+let fetchSupporters id = 
+  let rec loop curs = seq {
+    let vars = sprintf """{"type":"FUNDRAISING","slug":"%s","preview":false,"after":"%s"}""" id curs
+    let url = qS.Replace("%7B%22type%22%3A%22FUNDRAISING%22%2C%22slug%22%3A%22finleyandnanuk%22%2C%22preview%22%3Afalse%2C%22after%22%3A%22MTA%3D%22%7D", vars)
+    let sup = downloadCompressedHash url |> JustSupporters.Parse
+    for d in sup.Data.Page.Donations.Edges do yield d.Node
+    if sup.Data.Page.Donations.PageInfo.HasNextPage then
+      yield! loop sup.Data.Page.Donations.PageInfo.EndCursor }
+  loop ""
 
-let uk = 
-  srch.GroupedResults.[0].Results |> Seq.filter (fun f -> f.CountryCode = "United Kingdom")
-
-uk |> Seq.length
-
-let all = 
-  [ for f in uk ->
-      let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d2 = JustDetails2.Parse(downloadCompressedHash (q2.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d3 = JustDetails3.Parse(downloadCompressedHash (q3.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d4 = JustDetails4.Parse(downloadCompressedHash (q4.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d5 = JustDetails5.Parse(downloadCompressedHash (q5.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d6 = JustDetails6.Parse(downloadCompressedHash (q6.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d7 = JustDetails7.Parse(downloadCompressedHash (q7.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d8 = JustDetails8.Parse(downloadCompressedHash (q8.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let d9 = JustDetails9.Parse(downloadCompressedHash (q9.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let dA = JustDetailsA.Parse(downloadCompressedHash (qA.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let dB = JustDetailsB.Parse(downloadCompressedHash (qB.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let dC = JustDetailsC.Parse(downloadCompressedHash (qC.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-      let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+let fetchJustData kvd fname = 
+  let srch = 
+    "https://www.justgiving.com/onesearch/query?limit=10000&q=" + kvd + "&i=fundraiser&offset=0"
+    |> downloadCompressed 
+    |> JustSearch.Parse
   
-      let ch = fetchCharity f.CharityId
+  let uk = 
+    srch.GroupedResults.[0].Results |> Seq.filter (fun f -> f.CountryCode = "United Kingdom")
 
-      {| Title = f.Name
-         Link = f.Link
-         CharityName = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].Name
-         CharityId = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].RegistrationNumber
-         CharityAddress = try [ for k, v in ch.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
-         CharityAreaOfOperation = try ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
-         CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
-         MostRecentDonation = d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString()) |> Option.defaultValue ""
-         Raised = d4.Data.Page.DonationSummary.TotalAmount.Value
-         Target = d6.Data.Page.TargetWithCurrency.Value
-         Owner = d5.Data.Page.Owner.Name
-         Created = d6.Data.Page.CreateDate
-         DonationCount = d8.Data.Page.Donations.TotalCount |} ]
+  let all = 
+    [ for f in uk ->
+        let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        let d2 = JustDetails2.Parse(downloadCompressedHash (q2.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let d3 = JustDetails3.Parse(downloadCompressedHash (q3.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        let d4 = JustDetails4.Parse(downloadCompressedHash (q4.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        let d5 = JustDetails5.Parse(downloadCompressedHash (q5.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        let d6 = JustDetails6.Parse(downloadCompressedHash (q6.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let d7 = JustDetails7.Parse(downloadCompressedHash (q7.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        let d8 = JustDetails8.Parse(downloadCompressedHash (q8.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let d9 = JustDetails9.Parse(downloadCompressedHash (q9.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let dA = JustDetailsA.Parse(downloadCompressedHash (qA.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let dB = JustDetailsB.Parse(downloadCompressedHash (qB.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let dC = JustDetailsC.Parse(downloadCompressedHash (qC.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+  
+        let ch = fetchCharity f.CharityId
 
-all |> Seq.length
-all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.sortByDescending snd |> Seq.iter (printfn "%A")
-all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.length
+        {|  Title = f.Name
+            Link = f.Link
+            CharityName = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].Name
+            CharityId = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].RegistrationNumber
+            CharityAddress = try [ for k, v in ch.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
+            CharityAreaOfOperation = try ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
+            CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
+            MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString()) |> Option.defaultValue "" with _ -> ""
+            Raised = d4.Data.Page.DonationSummary.TotalAmount.Value
+            Target = d6.Data.Page.TargetWithCurrency.Value
+            Owner = d5.Data.Page.Owner.Name
+            Created = d6.Data.Page.CreateDate
+            DonationDetailCount = fetchSupporters (f.LinkPath.Substring(1)) |> Seq.length
+            DonationCount = d8.Data.Page.Donations.TotalCount |} ]
+  //  all |> Seq.length
+  //  all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.sortByDescending snd |> Seq.iter (printfn "%A")
+  //  all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.length
+  let df3 = Frame.ofRecords all
+  df3.SaveCsv(outFolder + "/" + fname + ".csv",includeRowKeys=false)
 
-let df3 = Frame.ofRecords all
-df3.SaveCsv(__SOURCE_DIRECTORY__ + "/outputs/just-foodbank.csv",includeRowKeys=false)
+let doitJust () = 
+  fetchJustData "foodbank" "just_foodbank"
+  fetchJustData "food%20bank" "just_food-bank"
+  fetchJustData "soup%20kitchen" "just_soup-kitchen"
+  fetchJustData "homeless" "just_homeless"
 
-let ch = fetchCharity 1176579
 
-//let ch = fetchCharity 210667
+doitVirgin ()
+doitGoFundMe ()
+doitJust ()
 
-  //ch.
-
-(*
-type CharityDetails = CsvProvider<const(__SOURCE_DIRECTORY__ + "/charitydetails.csv")>
-
-let charityPage id = 
-  sprintf "https://beta.charitycommission.gov.uk/charity-details/?regId=%d" id 
-    |> downloadCompressed |> HtmlDocument.Parse
-let charityDetails id = 
-  sprintf "https://beta.charitycommission.gov.uk/umbraco/api/charityApi/ExportSearchResultsToCsv/?searchText=%d&pageNumber=1&p=1"
-    id |> downloadCompressed |> CharityDetails.Parse
-
-let chp = charityPage 210667
-
-chp.CssSelect(".pcg-charity-details__block")
-|> Seq.map (fun b -> 
-  match b.CssSelect("h3") with 
-  | h3::_ -> h)
-
-let ch = charityDetails(210667).Rows |> Seq.head
-ch.``Charity name``
-ch.``Total spending``
-ch
-*)
