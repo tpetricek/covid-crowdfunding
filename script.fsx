@@ -12,8 +12,8 @@ open System.Net
 open System.Web
 open System.IO
 
-let temp = __SOURCE_DIRECTORY__ + "/cache/2020-05-17"
-let outFolder = __SOURCE_DIRECTORY__ + "/outputs/2020-05-17"
+let temp = __SOURCE_DIRECTORY__ + "/cache/2020-06-01"
+let outFolder = __SOURCE_DIRECTORY__ + "/outputs/2020-06-01"
 Directory.CreateDirectory(temp)
 Directory.CreateDirectory(outFolder)
 
@@ -454,6 +454,6 @@ let doitJust () =
 
 
 doitVirgin ()
-doitGoFundMe ()
+doitGoFundMe () 
 doitJust ()
 
