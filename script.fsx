@@ -12,8 +12,8 @@ open System.Net
 open System.Web
 open System.IO
 
-let temp = __SOURCE_DIRECTORY__ + "/cache/2020-06-01"
-let outFolder = __SOURCE_DIRECTORY__ + "/outputs/2020-06-01"
+let temp = __SOURCE_DIRECTORY__ + "/cache/2020-06-14"
+let outFolder = __SOURCE_DIRECTORY__ + "/outputs/2020-06-14"
 Directory.CreateDirectory(temp)
 Directory.CreateDirectory(outFolder)
 
@@ -452,8 +452,11 @@ let doitJust () =
   fetchJustData "soup%20kitchen" "just_soup-kitchen"
   fetchJustData "homeless" "just_homeless"
 
-
-doitVirgin ()
-doitGoFundMe () 
-doitJust ()
+for i in 0 .. 10 do
+  try
+    doitVirgin ()
+    doitGoFundMe () 
+    doitJust ()
+  with _ -> 
+    ()
 
