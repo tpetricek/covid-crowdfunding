@@ -3,3 +3,7 @@ paket.targets
 downloads
 paket-files
 cache
+analysis/obj
+analysis/output
+analysis/bin
+analysis/packages

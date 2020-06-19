@@ -12,8 +12,12 @@ open System.Net
 open System.Web
 open System.IO
 
-let temp = __SOURCE_DIRECTORY__ + "/cache/2020-06-14"
-let outFolder = __SOURCE_DIRECTORY__ + "/outputs/2020-06-14"
+//let today = DateTime.Parse "2020-05-17"
+//let today = DateTime.Parse "2020-06-01"
+let today = DateTime.Parse "2020-06-14"
+
+let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
+let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
 Directory.CreateDirectory(temp)
 Directory.CreateDirectory(outFolder)
 
@@ -117,18 +121,6 @@ let (|ByTagAndId|_|) (tag,id) (fd:HtmlDocument) =
   fd.CssSelect(tag) |> Seq.tryFind (fun i ->
     (i.AttributeValue("id").Trim() = id) )
 
-type Fundraiser = 
-  { Fundraiser : string 
-    Raised : float 
-    Charity : string 
-    Operates : string 
-    Postcode : string 
-    Activities : string 
-    Description : string 
-    Address : string 
-    FirstDonation : string
-    LastDonation : string }
-
 let toDateTime (timestamp:int64) =
   let start = DateTime(1970,1,1,0,0,0,DateTimeKind.Utc)
   start.AddSeconds(float (timestamp / 1000L)).ToLocalTime()
@@ -147,23 +139,23 @@ let fetchVirginData kvd fname =
         ( ByTagAndId ("input", "fundraiserPageActivityId") pageid & 
           ByTagAndId ("input", "totalDonationInputHidden") don ) ->
         let raised = don.Attribute("value").Value() |> float
-        let dons = virginDonations (int (pageid.AttributeValue("value"))) 
+        let dons = virginDonations (int (pageid.AttributeValue("value"))) |> Array.ofSeq
   
         printfn "\nFUNDRAISER: %s (%s)" f.FundraiserName f.DisplayPageUrl
         printfn "DONATIONS: %A" (Seq.length dons)
-        let dates = dons |> Seq.map (fun d -> d.DonationDatetime)
+        let dates = dons |> Seq.map (fun d -> toDateTime d.DonationDatetime)
         if not (Seq.isEmpty dons) then
-          printfn "FIRST DONATION: %O" (toDateTime (Seq.min dates))
-          printfn "LAST DONATION: %O" (toDateTime (Seq.max dates))
+          //printfn "FIRST DONATION: %O" (Seq.min dates)
+          //printfn "LAST DONATION: %O" (Seq.max dates)
           printfn "RAISED: GBP %f" raised
 
         //for n, id in Seq.zip f.CharityNames f.CharityIds do
         let n, id = Seq.zip f.CharityNames f.CharityIds |> Seq.head // not right
         let ch = fetchCharity id
         printfn "CHARITY: %s" n
-        printfn "OPERATES: %s" (ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", ")
-        printfn "POSTCODE: %s" ch.Address.Postcode
-        printfn "ACTIVITIES: %s" ch.Activities
+        //printfn "OPERATES: %s" (ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", ")
+        //printfn "POSTCODE: %s" ch.Address.Postcode
+        //printfn "ACTIVITIES: %s" ch.Activities
 
         let vch = virginCharityDetail id
         let desc = 
@@ -175,19 +167,21 @@ let fetchVirginData kvd fname =
           if p.InnerText().Contains("Registered address") then Some(p.DirectInnerText().Trim().Replace("\n"," ").Replace("\r"," ")) 
           else None)
 
-        printfn "DESCRIPTION: %s" (desc.Replace("\r", " ").Replace("\n", " "))
-        printfn "ADDRESS: %s" addr
-
-        { Fundraiser = f.FundraiserName
-          Raised = raised
+        //printfn "DESCRIPTION: %s" (desc.Replace("\r", " ").Replace("\n", " "))
+        //printfn "ADDRESS: %s" addr
+        
+        {|Url = "https://uk.virginmoneygiving.com/fundraiser-display/" + f.DisplayPageUrl
+          Fundraiser = f.FundraiserName
+          Raised = int raised
           Charity = n
-          FirstDonation = if Seq.isEmpty dates then "" else (toDateTime (Seq.min dates)).ToShortDateString()
-          LastDonation = if Seq.isEmpty dates then "" else (toDateTime (Seq.max dates)).ToShortDateString()
+          FirstDonation = if Seq.isEmpty dates then "" else (Seq.min dates).ToString("yyyy-MM-dd")
+          LastDonation = if Seq.isEmpty dates then "" else (Seq.max dates).ToString("yyyy-MM-dd")
           Operates = ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", "
           Postcode = ch.Address.Postcode
           Activities = ch.Activities
-          Description = desc
-          Address = addr } |> fundraisers.Add
+          Description = desc.Replace("\r", " ").Replace("\n", " ")
+          Donations = dons |> Array.choose (fun d -> try Some (sprintf "%s %d" ((toDateTime d.DonationDatetime).ToString("yyyy-MM-dd")) d.GrossAmount) with _ -> None)  |> String.concat "/"
+          Address = addr |} |> fundraisers.Add
     | _ -> ()
 
   let df = Frame.ofRecords fundraisers
@@ -243,10 +237,10 @@ let goFundDetails url =
   if doc.CssSelect(".a-created-date").Length = 0 then None else
   let created = doc.CssSelect(".a-created-date").[0].InnerText().Replace("Created ", "")
   let created = 
-    if created.EndsWith " days ago" then DateTime.Today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
-    elif created.EndsWith " day ago" then DateTime.Today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
-    elif created.EndsWith " hours ago" then DateTime.Today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
-    elif created.EndsWith " hour ago" then DateTime.Today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
+    if created.EndsWith " days ago" then today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
+    elif created.EndsWith " day ago" then today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
+    elif created.EndsWith " hours ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
+    elif created.EndsWith " hour ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
     else DateTime.Parse created
   let story = doc.CssSelect(".o-campaign-story").[0].InnerText()
   let org = doc.CssSelect(".m-organization-info-content-child")
@@ -262,13 +256,15 @@ let goFundDetails url =
     else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", ""))
 
   let id = url.Replace("https://www.gofundme.com/f/", "")
-  let mrd, doncnt = 
+  let dons, mrd, doncnt = 
     try
-      goFundDonations id |> Seq.tryHead |> Option.map (fun m -> m.CreatedAt),
-      goFundDonations id |> Seq.length
-    with :? System.Net.WebException as we when we.Message.Contains("404") -> None, -1
-  {| Created=created; Story=story; Organization=fst org; OrganizationDetails=snd org;
-     Raised=raised; Target=target; MostRecentDonation=mrd; DonationCount = doncnt |} |> Some
+      let dons = goFundDonations id |> Array.ofSeq
+      dons |> Seq.map (fun d -> sprintf "%s %d" (d.CreatedAt.ToString("yyyy-MM-dd")) d.Amount) |> String.concat "/",
+      dons |> Seq.tryHead |> Option.map (fun m -> m.CreatedAt.ToString("yyyy-MM-dd")) |> Option.defaultValue "",
+      dons |> Seq.length
+    with :? System.Net.WebException as we when we.Message.Contains("404") -> "", "", -1
+  {| Created=created.ToString("yyyy-MM-dd"); Story=story.Replace('\n', ' ').Replace('\r', ' ').Replace(',', ' '); Organization=fst org; OrganizationDetails=snd org;
+     Raised=raised; Target=target; Donations=dons; MostRecentDonation=mrd; DonationCount = doncnt |} |> Some
 
 let fetchAll term =   
   let res = 
@@ -284,9 +280,6 @@ let saveAll (all:seq<_>) file =
     Frame.ofRecords all
     |> Frame.expandAllCols 1
 
-  df.ReplaceColumn("Details.MostRecentDonation",
-    df.GetColumn<option<DateTimeOffset>>("Details.MostRecentDonation") |> Series.mapAll (fun _ v -> Option.flatten v))
-
   let df2 = df.Columns.[[  
     "Title"
     "Location"
@@ -298,6 +291,7 @@ let saveAll (all:seq<_>) file =
     "Details.Organization"
     "Details.OrganizationDetails"
     "Details.DonationCount"
+    "Details.Donations"
     "Details.Story"
     ]]
   
@@ -400,31 +394,32 @@ let fetchJustData kvd fname =
     "https://www.justgiving.com/onesearch/query?limit=10000&q=" + kvd + "&i=fundraiser&offset=0"
     |> downloadCompressed 
     |> JustSearch.Parse
-  
+
   let uk = 
     srch.GroupedResults.[0].Results |> Seq.filter (fun f -> f.CountryCode = "United Kingdom")
 
   let all = 
     [ for i, f in Seq.indexed uk do
-        printfn "%d/%d" i (Seq.length uk)
+        printfn "%d/%d (%s)" i (Seq.length uk) f.Link
         let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         let d2 = JustDetails2.Parse(downloadCompressedHash (q2.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let d3 = JustDetails3.Parse(downloadCompressedHash (q3.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-        let d4 = JustDetails4.Parse(downloadCompressedHash (q4.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let d4 = JustDetails4.Parse(downloadCompressedHash (q4.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         let d5 = JustDetails5.Parse(downloadCompressedHash (q5.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         let d6 = JustDetails6.Parse(downloadCompressedHash (q6.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let d7 = JustDetails7.Parse(downloadCompressedHash (q7.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-        let d8 = JustDetails8.Parse(downloadCompressedHash (q8.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        //let d8 = JustDetails8.Parse(downloadCompressedHash (q8.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let d9 = JustDetails9.Parse(downloadCompressedHash (q9.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dA = JustDetailsA.Parse(downloadCompressedHash (qA.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dB = JustDetailsB.Parse(downloadCompressedHash (qB.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dC = JustDetailsC.Parse(downloadCompressedHash (qC.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-        printfn "\nSCRAPING: %s (%s)" f.Name f.Link
+        //printfn "\nSCRAPING: %s (%s)" f.Name f.Link
         let ch = fetchCharity f.CharityId
 
         if (try ignore(d1.Data.Page); true with _ -> false) then
+          let sups = fetchSupporters (f.LinkPath.Substring(1)) |> Array.ofSeq
           yield 
            {| Title = f.Name
               Link = f.Link
@@ -433,13 +428,17 @@ let fetchJustData kvd fname =
               CharityAddress = try [ for k, v in ch.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
               CharityAreaOfOperation = try ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
               CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
-              MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString()) |> Option.defaultValue "" with _ -> ""
-              Raised = d4.Data.Page.DonationSummary.TotalAmount.Value
-              Target = d6.Data.Page.TargetWithCurrency.Value
+              MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString("yyyy-MM-dd")) |> Option.defaultValue "" with _ -> ""
+              Raised = d6.Data.Page.DonationSummary.TotalAmount.Value / 100
+              Target = d6.Data.Page.TargetWithCurrency.Value / 100
               Owner = d5.Data.Page.Owner.Name
-              Created = d6.Data.Page.CreateDate
-              DonationDetailCount = fetchSupporters (f.LinkPath.Substring(1)) |> Seq.length
-              DonationCount = d8.Data.Page.Donations.TotalCount |} ]
+              Created = d6.Data.Page.CreateDate.ToString("yyyy-MM-dd")
+              DonationDetailCount = sups |> Seq.length
+              DonationCount = d6.Data.Page.DonationSummary.DonationCount
+              Donations = 
+                sups |> Array.choose (fun d -> try Some(sprintf "%s %d" (d.CreationDate.ToString("yyyy-MM-dd")) (d.Amount.Value / 100)) with _ -> None)
+                  |> String.concat "/"
+              |} ]
   //  all |> Seq.length
   //  all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.sortByDescending snd |> Seq.iter (printfn "%A")
   //  all |> Seq.countBy (fun ch -> ch.CharityName) |> Seq.length
