@@ -170,12 +170,12 @@ let fetchVirginData kvd fname =
         //printfn "DESCRIPTION: %s" (desc.Replace("\r", " ").Replace("\n", " "))
         //printfn "ADDRESS: %s" addr
         
-        {|Url = "https://uk.virginmoneygiving.com/fundraiser-display/" + f.DisplayPageUrl
+        {|Link = "https://uk.virginmoneygiving.com/fundraiser-display/" + f.DisplayPageUrl
           Fundraiser = f.FundraiserName
           Raised = int raised
           Charity = n
-          FirstDonation = if Seq.isEmpty dates then "" else (Seq.min dates).ToString("yyyy-MM-dd")
-          LastDonation = if Seq.isEmpty dates then "" else (Seq.max dates).ToString("yyyy-MM-dd")
+          Created (* First donation.. *) = if Seq.isEmpty dates then "" else (Seq.min dates).ToString("yyyy-MM-dd")
+          MostRecentDonation = if Seq.isEmpty dates then "" else (Seq.max dates).ToString("yyyy-MM-dd")
           Operates = ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", "
           Postcode = ch.Address.Postcode
           Activities = ch.Activities
@@ -229,7 +229,7 @@ let goFundDonations id =
       yield! loop (offset + 100) }
   loop 0
 
-let goFundDetails url = 
+let goFundDetails (title, location) url = 
   let doc = try downloadCompressed url |> HtmlDocument.Parse |> Some with :? System.Net.WebException -> None
   match doc with 
   | None -> None
@@ -263,7 +263,8 @@ let goFundDetails url =
       dons |> Seq.tryHead |> Option.map (fun m -> m.CreatedAt.ToString("yyyy-MM-dd")) |> Option.defaultValue "",
       dons |> Seq.length
     with :? System.Net.WebException as we when we.Message.Contains("404") -> "", "", -1
-  {| Created=created.ToString("yyyy-MM-dd"); Story=story.Replace('\n', ' ').Replace('\r', ' ').Replace(',', ' '); Organization=fst org; OrganizationDetails=snd org;
+  {| Title=title; Location=location; Link=url;
+     Created=created.ToString("yyyy-MM-dd"); Story=story.Replace('\n', ' ').Replace('\r', ' ').Replace(',', ' '); Organization=fst org; OrganizationDetails=snd org;
      Raised=raised; Target=target; Donations=dons; MostRecentDonation=mrd; DonationCount = doncnt |} |> Some
 
 let fetchAll term =   
@@ -272,8 +273,7 @@ let fetchAll term =
     |> Seq.filter (fun (_, _, l) -> l.Contains "United Kingdom") |> Array.ofSeq
   [ for i, (t, u, l) in Seq.indexed res do
       printfn "SCRAPING (%d/%d): %s" i res.Length u
-      let d = goFundDetails u
-      if d.IsSome then yield {| Title=t; Url=u; Location=l; Details = d.Value |} ] 
+      yield! goFundDetails (t, l) u |> Option.toList ] 
 
 let saveAll (all:seq<_>) file =
   let df = 
@@ -283,16 +283,16 @@ let saveAll (all:seq<_>) file =
   let df2 = df.Columns.[[  
     "Title"
     "Location"
-    "Url"
-    "Details.Raised"
-    "Details.Target"
-    "Details.MostRecentDonation"
-    "Details.Created"
-    "Details.Organization"
-    "Details.OrganizationDetails"
-    "Details.DonationCount"
-    "Details.Donations"
-    "Details.Story"
+    "Link"
+    "Raised"
+    "Target"
+    "MostRecentDonation"
+    "Created"
+    "Organization"
+    "OrganizationDetails"
+    "DonationCount"
+    "Donations"
+    "Story"
     ]]
   
   df2.SaveCsv(outFolder + "/" + file + ".csv",includeRowKeys=false)
@@ -311,8 +311,8 @@ let doitGoFundMe () =
   saveAll allH "gofundme_homeless"
 
   Set.intersect
-    (set [ for f in allFB -> f.Url ])
-    (set [ for f in allFsB -> f.Url ])
+    (set [ for f in allFB -> f.Link ])
+    (set [ for f in allFsB -> f.Link ])
   |> Seq.length
   |> ignore
 

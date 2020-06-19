@@ -7,3 +7,5 @@ analysis/obj
 analysis/output
 analysis/bin
 analysis/packages
+analysis/.fake
+analysis/.paket/paket.exe
