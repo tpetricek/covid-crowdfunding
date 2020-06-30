@@ -14,7 +14,9 @@ open System.IO
 
 //let today = DateTime.Parse "2020-05-17"
 //let today = DateTime.Parse "2020-06-01"
-let today = DateTime.Parse "2020-06-14"
+//let today = DateTime.Parse "2020-06-14"
+let today = DateTime.Parse "2020-06-29"
+
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -249,6 +251,7 @@ let goFundDetails (title, location) url =
   let prog = doc.CssSelect(".m-progress-meter-heading")
   let l1 = prog.[0].DirectInnerText()
   let l2 = prog.CssSelect("span").[0].DirectInnerText()
+  if l1.Contains "$" or l2.Contains "$" then None else // Ignore dollars
   let intp (s:string) = int (s.Replace("£", "").Replace(",",""))
   let raised, target = 
     if l2 = "raised" then intp l1, -1
@@ -451,11 +454,13 @@ let doitJust () =
   fetchJustData "soup%20kitchen" "just_soup-kitchen"
   fetchJustData "homeless" "just_homeless"
 
-for i in 0 .. 10 do
+let mutable finished = false
+while not finished do
   try
     doitVirgin ()
     doitGoFundMe () 
     doitJust ()
+    finished <- true
   with _ -> 
     ()
 
