@@ -8,7 +8,9 @@ open XPlot.GoogleCharts
 
 Environment.CurrentDirectory <- __SOURCE_DIRECTORY__
 (**
-# Exploring foodbank fundraisers
+<h1 style="font-size:34pt">Exploring foodbank fundraisers</h1>
+
+---
 
 # Merge data
 
@@ -20,13 +22,7 @@ replaces older records with newer (with more data about individual
 donations hopefully).
 
 *)
-let files = 
-  [ for s in ["gofundme"; "just"; "virgin"] do
-    for d in ["2020-05-17"; "2020-06-01"; "2020-06-14"] do 
-    for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-    yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
-
-let merged = 
+let mergeFiles (files:seq<string * string>) = 
   let res = Dictionary<_, _>()
   for s, f in files do
     let df = Frame.ReadCsv(f,inferTypes=false)
@@ -34,9 +30,17 @@ let merged =
       let url = r.GetAs<string>("Link")
       res.[url] <- 
         Series.merge (series ["Source" => box s])
-          r.[["Link"; "Created"; "MostRecentDonation"; "Donations"; "Raised"]] 
+          r.[["Link"; "Created"; "MostRecentDonation"; "Donations"; "Raised"; "Complete"]] 
   Frame.ofRows [ for (KeyValue(k,v)) in res -> k => v ]
   |> Frame.dropSparseRows
+
+let files = 
+  [ for s in ["gofundme"; "just"; "virgin"] do
+    for d in ["2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"] do 
+    for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
+    yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
+
+let merged = mergeFiles files
 (**
 # Individual donations
 
@@ -302,10 +306,11 @@ data scrapes, but then disappeared in one of the later ones, how many days
 was there before they were created and then disappeared?
 *)
 let rowsAt d = 
-  [|for s in ["gofundme"; "just"; "virgin"] do
-    for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-    let f = sprintf "../outputs/%s/%s_%s.csv" d s k 
-    yield! Frame.ReadCsv(f,inferTypes=false).Rows.Values |]
+  let files = 
+    [ for s in ["gofundme"; "just"; "virgin"] do
+      for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
+      yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
+  (mergeFiles files).Rows.Values
 
 let removed datePairs = 
   [| for od, nd in datePairs do
@@ -315,14 +320,17 @@ let removed datePairs =
       for r in o do
         if r.GetAs "Created" <> "" && not (nks.Contains(r.GetAs<string>("Link"))) then
           let dt = r.GetAs<DateTime> "Created"
-          yield r.GetAs<string> "Link", int (nd - dt).TotalDays / 7 |]
+          yield r.GetAs<string> "Link", (nd, int (nd - dt).TotalDays / 7) |]
 (**
 For the fundraisers that disappeared, how old they were (in weeks) when 
 they disappeared from our dataset?
 *)
 (*** define-output:r1 ***)
-removed ["2020-05-17","2020-06-01"; "2020-06-01","2020-06-14"]
-|> Array.map snd
+removed 
+  [ "2020-05-17","2020-06-01"; 
+    "2020-06-01","2020-06-14"; 
+    "2020-06-14","2020-06-29"]
+|> Array.map (snd >> snd)
 |> Array.countBy id
 |> Array.sortBy fst
 |> Chart.Column
@@ -331,8 +339,11 @@ removed ["2020-05-17","2020-06-01"; "2020-06-01","2020-06-14"]
 Looking only at those that disappeared after less than 10 weeks:
 *)
 (*** define-output:r2 ***)
-removed ["2020-05-17","2020-06-01"; "2020-06-01","2020-06-14"]
-|> Array.map snd
+removed 
+  [ "2020-05-17","2020-06-01"; 
+    "2020-06-01","2020-06-14"; 
+    "2020-06-14","2020-06-29"]
+|> Array.map (snd >> snd)
 |> Array.filter (fun w -> w < 10)
 |> Array.countBy id
 |> Array.sortBy fst
@@ -340,11 +351,15 @@ removed ["2020-05-17","2020-06-01"; "2020-06-01","2020-06-14"]
 (*** include-it:r2 ***)
 (**
 If we look at fundraisers that we have in our data that were created
-in March 2020 or later, how many of those disappeared between 17/5 and 1/6?
+in March 2020 or later, how many of those disappeared between 
+17/5 and 1/6 and between 1/6 and 14/6?
 *)
 (*** define-output:r3 ***)
 let removedKeys = 
-  removed ["2020-05-17","2020-06-01"]
+  removed 
+    [ "2020-05-17","2020-06-01"; 
+      "2020-06-01","2020-06-14"; 
+      "2020-06-14","2020-06-29"]
   |> Array.map fst |> set
 
 let getRemovedOrNot removed = 
@@ -381,4 +396,204 @@ clean
 |> Chart.Column
 (*** include-it:old1 ***)
 
+(**
 
+# Estimating short-lived from long-lived fundraisers 
+
+What can we do to say something about fundraisers before we started scraping data on 17 May?
+One idea is that we can estimate the number of short-term fundraisers (i.e. those that disappeared
+before 17 May) from the number of long-term fundraisers (i.e. those that were setup sometime
+before 17 May, but are still present in our data set).
+
+
+Before we do this, we'll do some data cleaning and save `merged.csv` file. This is our 
+merged data set generated earlier, now with an extra column `Removed` which indicates
+whether a fundraiser has been removed (and if so, when).
+*)
+let removedSeries = 
+  removed 
+    [ "2020-05-17","2020-06-01"; 
+      "2020-06-01","2020-06-14"; 
+      "2020-06-14","2020-06-29"]
+  |> Array.map (fun (k, (dt, _)) -> k, dt.ToString("yyyy-MM-dd")) 
+  |> series
+
+let withRemoved = merged |> Frame.addCol "Removed" removedSeries
+withRemoved.SaveCsv("../outputs/merged.csv")
+(**
+
+## Counting short-lived and long-lived fundraisers
+
+A short-lived fundraiser is one that has been removed in less than a specified 
+number of weeks. The number of weeks can be set freely - the bigger this is, the
+further into the past we will be able to estimate (if we have first data from 
+17 May and "long-lived" fundraisers are those that have been in the data set for
+at least 4 weeks, then we have enough data to talk about 19 April; if we set this
+to 6 weeks, then we can talk about 5 April).
+
+First, let's again see how long it takes for a fundraiser to be removed 
+(looking at fundraisers removed in less than 100 days only):
+*)
+(*** define-output:estsl1 ***)
+withRemoved 
+|> Frame.mapRows (fun _ row -> 
+  try 
+    let diff = row.GetAs<DateTime>("Removed") - row.GetAs<DateTime>("Created")
+    Some(int diff.TotalDays) 
+  with _ -> None)
+|> Series.dropMissing
+|> Series.mapValues (fun v -> v.Value)
+|> Series.values
+|> Seq.filter (fun d -> d < 100)
+|> Seq.countBy id
+|> Seq.sort
+|> Chart.Column
+(*** include-it:estsl1 ***)
+(**
+
+It looks like there is a peak around (roughly) 4 weeks, so we're going to use that as
+our separator between short-lived and long-lived now. It is also worth noting that 
+no fundraisers get removed in less than 14 days, so we can assume that we have information
+on all short-lived fundraisers from 14 days before our first scrape (i.e. 3 May).
+
+Now, let's collect all our long-lived and short-lived fundraisers. For short-lived ones, 
+we only look at those created 4 weeks before our last scrape (because we cannot for sure
+say which of those will be removed in the next scrape).
+*)
+let shortDays = 7*4
+let shortEnd = DateTime(2020, 6, 1)
+
+let shortLived = 
+  [ for row in withRemoved.Rows.Values do
+      let removed = row.TryGetAs<DateTime>("Removed")
+      if row.GetAs<string>("Created") <> "" then
+        let created = row.GetAs<DateTime>("Created")
+        if created < shortEnd && removed.HasValue then
+          let days = int (removed.Value - created).TotalDays
+          if days < shortDays then
+            yield previousMonday created, days ]
+
+let longLived = 
+  [ for row in withRemoved.Rows.Values do
+      if row.GetAs<string>("Created") <> "" then
+        let created = row.GetAs<DateTime>("Created")
+        let removed = 
+          row.TryGetAs<DateTime>("Removed") 
+          |> OptionalValue.asOption |> Option.map (fun dt ->
+          int (dt - created).TotalDays)
+        if created < shortEnd && (removed.IsNone || removed.Value > shortDays) then
+          yield previousMonday created, removed ]
+(**
+Now we have two things:
+
+ - `shortLived` is a list of fundraisers created before `shortEnd` that were removed in 
+    less than `shortDays` number of days. The list contains the date of the Monday of
+    the week in which they were created together with the number of days they stayed
+    in our dataset.
+
+ - `longLived` is a list of fundraisers that were created before `shortEnd` that 
+    were either never removed or stayed in our dataset at least `shortDays` number 
+    of days. As before, the list contains Monday of a week together with (optional)
+    number of days.
+
+Once again, the number of short-lived fundraisers that stayed a given number of days
+and a number of long-lived fundraisers that stayed a given number of days (before
+being removed):
+*)          
+(*** define-output:estsl2 ***)
+shortLived
+|> Seq.countBy snd
+|> Seq.sortBy fst
+|> Chart.Column
+(*** include-it:estsl2 ***)
+(*** define-output:estsl3 ***)
+longLived
+|> Seq.countBy snd
+|> Seq.choose (fun (k, v) -> if k.IsNone then None else Some(k.Value, v))
+|> Seq.sortBy fst
+|> Chart.Column
+(*** include-it:estsl3 ***)
+(**
+## Visualizing number of short and long-lived fundraisers
+
+Let's now look at the data that we have about short-term and long-term 
+fundraisers. The following shows the number of short-term fundraisers started
+on the weeks for which we have enough data to be able to say this:
+*)
+(*** define-output:estsl4 ***)
+let sc = shortLived |> Seq.countBy fst |> Seq.sortBy fst
+sc |> Chart.Column
+(*** include-it:estsl4 ***)
+(**
+And the following shows the number of long-term fundraisers, started on the
+weeks for which we have enough data:
+*)
+(*** define-output:estsl5 ***)
+let lc = 
+  longLived 
+  |> Seq.filter (fun (dt, _) -> dt.Year = 2020)
+  |> Seq.filter (fun (dt, _) -> (dt.Month = 4 && dt.Day >= 19) || dt.Month = 5)
+  |> Seq.countBy fst |> Seq.sortBy fst
+lc |> Chart.Column
+(*** include-it:estsl5 ***)
+(**
+In order to estimate the number of short-lived fundraisers from the number
+of long-lived funraisers, we're going to assume that the ratio between them
+(started each week) is roughly the same. Let's compare the two first:
+*)
+(*** define-output:estsl6 ***)
+Chart.Column([lc;sc])
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels ["Long lived"; "Short lived"]
+(*** include-it:estsl6 ***)
+(**
+To see this better, we can look at a stacked bar chart where the values
+add up to 100%:
+*)
+(*** define-output:estsl7 ***)
+let sc4, lc4 = sc, Seq.skip 2 lc
+Chart.Column([ 
+    [ for (d, s), (_, l) in Seq.zip sc4 lc4 -> d, float l / float (s + l) * 100. ]
+    [ for (d, s), (_, l) in Seq.zip sc4 lc4 -> d, float s / float (s + l) * 100. ] ])
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels ["Long lived"; "Short lived"]
+(*** include-it:estsl7 ***)
+(**
+For the estimation, we'll just calculate the average ratio between short-lived
+and long-lived fundraisers:
+*)
+let ratio = 
+  Seq.map2 (fun (_, s) (_, l) -> float s / float l) sc4 lc4 
+  |> Seq.average
+(**
+How far back can we reasonably use this estimation? Our first data scrape is
+on May 17. We assume that long-term fundraisers are those that have been in 
+our data set for at least 4 weeks, so our data set contains all long-term 
+fundraisers started on April 19. This is our `lc` value defined earlier.
+
+We can thus reasonably assume that we know the number of short-term fundraisers
+from May 4 onward (because all fundraisers stay at least 14 days) and we can 
+estimate the number of short-term from long-term from April 20 onward:
+*)
+(*** define-output:estsl8 ***)
+let scd = sc |> Seq.map fst |> set
+let est = seq { 
+  for d, v in lc do 
+    if not(scd.Contains(d)) then 
+      yield d, int (float v * ratio) }
+
+[ lc; sc; est ] 
+|> Chart.Column 
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels ["Long lived"; "Short lived"; "Short lived estimate" ]
+(*** include-it:estsl8 ***)
+(**
+In summary, if we add the two kinds of fundraisers, we have the following total numbers:
+*)
+(*** define-output:estsl9 ***)
+Seq.zip lc (Seq.append est sc)
+|> Seq.map (fun ((ld, l), (sd, s)) ->
+  if ld <> sd then failwith "Wrong date"
+  ld, l + s)
+|> Chart.Column 
+(*** include-it:estsl9 ***)
