@@ -36,7 +36,7 @@ let mergeFiles (files:seq<string * string>) =
 
 let files = 
   [ for s in ["gofundme"; "just"; "virgin"] do
-    for d in ["2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"] do 
+    for d in ["2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"; "2020-07-12" ] do 
     for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
     yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
 
@@ -414,7 +414,9 @@ let removedSeries =
   removed 
     [ "2020-05-17","2020-06-01"; 
       "2020-06-01","2020-06-14"; 
-      "2020-06-14","2020-06-29"]
+      "2020-06-14","2020-06-29"; 
+      "2020-06-29","2020-07-12"; 
+      ]
   |> Array.map (fun (k, (dt, _)) -> k, dt.ToString("yyyy-MM-dd")) 
   |> series
 
