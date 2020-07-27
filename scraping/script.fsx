@@ -16,7 +16,8 @@ open System.IO
 //let today = DateTime.Parse "2020-06-01"
 //let today = DateTime.Parse "2020-06-14"
 //let today = DateTime.Parse "2020-06-29"
-let today = DateTime.Parse "2020-07-12"
+//let today = DateTime.Parse "2020-07-12"
+let today = DateTime.Parse "2020-07-26"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
