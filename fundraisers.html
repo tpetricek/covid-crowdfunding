@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!--
+      The Estimating data for March fundraisers parameters will be replaced with the
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>Estimating data for March fundraisers</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="styles/style.css" />
+    <script src="styles/tips.js" type="text/javascript"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript">
+        google.charts.load('current', {
+            packages: ["corechart", "annotationchart", "calendar", "gauge", "geochart", "map", "sankey", "table", "timeline", "treemap"]
+        });
+      $(function() { if (window.fsiResizeContent) window.fsiResizeContent($("body").height() + 10); });
+    </script>
+
+  <style type="text/css">
+    .grid {
+      font-size:11pt;
+      font-family:sans-serif;
+      color:#000000;
+    }
+
+    .grid ::-webkit-scrollbar  {
+      width:6px;
+      height:6px;
+      background:transparent;
+    }
+
+    .grid ::-webkit-scrollbar-track {
+      background:transparent;
+    }
+
+    .grid ::-webkit-scrollbar-thumb {
+      border-radius:3px;
+      background-color:#c1c1c1;
+    }
+
+    .grid .faded {
+      color:#a0a0a0;
+    }
+
+    .grid tr {
+      background-color: #fdfdfd;
+    }
+
+    .grid tbody tr:nth-child(odd) {
+      background-color: #f4f4f4;
+    }
+
+    .grid thead tr {
+      background: #fdfdfd;
+    }
+
+    .grid table {
+      top:0px;
+      left:0px;
+      width:100%;
+      border-spacing: 0;
+      border-collapse: collapse;
+    }
+
+    .grid td, .grid th {
+      border-bottom:1px solid #a0a0a0;
+      padding:4px 10px 4px 10px;
+      min-width:50px;
+    }
+
+    .grid thead th {
+      border-bottom:3px solid #a0a0a0;
+    }
+
+    .grid th {
+      padding:4px 20px 4px 10px;
+      text-align:left;
+      font-weight:bold;
+    }
+
+    .live-grid {
+      position:relative;
+      overflow:hidden;
+    }
+
+    .live-grid .scroller {
+      overflow-y: scroll;
+      position:absolute;
+      width:100%;
+    }
+
+    .live-grid table {
+      position:absolute;
+    }
+  </style>
+    <script language="javascript" type="text/javascript">
+      function init()
+      {
+        try {
+          websocket = new WebSocket("ws://" + window.location.hostname + ":" + window.location.port + "/websocket");
+          websocket.onmessage = function(evt) { location.reload(); };
+        } catch (e) { /* silently ignore lack of websockets */ }
+      }
+      window.addEventListener("load", init, false);
+    </script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="row" style="margin-top:30px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>Estimating data for March fundraisers</h1>
+<p>Our first data is from May 17. This contains fundraisers from March, but only those that
+stayed active for over 8 weeks. Short-lived fundraisers would have been removed from the
+web before we started scraping data. In this analysis, I will estimate the number of
+short-term fundraisers (<4 weeks) and regular fundraisers (4-8 weeks) based on the number
+of long-term fundraisers (>8 weeks).</p>
+<h2>Getting the data</h2>
+<p>The analysis will use data from our <code>merged.csv</code> file produced by another notebook.
+We first do some parsing &amp; loading and boring pre-processing of the data.</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs9', 10)" onmouseover="showTip(event, 'fs9', 10)" class="t">Fundraiser</span> <span class="o">=</span> 
+  { <span onmouseout="hideTip(event, 'fs10', 11)" onmouseover="showTip(event, 'fs10', 11)" class="i">Source</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs11', 12)" onmouseover="showTip(event, 'fs11', 12)" class="t">string</span>
+    <span onmouseout="hideTip(event, 'fs12', 13)" onmouseover="showTip(event, 'fs12', 13)" class="i">Link</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs11', 14)" onmouseover="showTip(event, 'fs11', 14)" class="t">string</span> 
+    <span onmouseout="hideTip(event, 'fs13', 15)" onmouseover="showTip(event, 'fs13', 15)" class="i">Created</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 16)" onmouseover="showTip(event, 'fs14', 16)" class="t">DateTime</span>
+    <span onmouseout="hideTip(event, 'fs15', 17)" onmouseover="showTip(event, 'fs15', 17)" class="i">Week</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 18)" onmouseover="showTip(event, 'fs14', 18)" class="t">DateTime</span>
+    <span onmouseout="hideTip(event, 'fs16', 19)" onmouseover="showTip(event, 'fs16', 19)" class="i">MostRecentDonation</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 20)" onmouseover="showTip(event, 'fs14', 20)" class="t">DateTime</span> <span onmouseout="hideTip(event, 'fs17', 21)" onmouseover="showTip(event, 'fs17', 21)" class="t">option</span>
+    <span onmouseout="hideTip(event, 'fs18', 22)" onmouseover="showTip(event, 'fs18', 22)" class="i">Donations</span> <span class="o">:</span> (<span onmouseout="hideTip(event, 'fs14', 23)" onmouseover="showTip(event, 'fs14', 23)" class="t">DateTime</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs19', 24)" onmouseover="showTip(event, 'fs19', 24)" class="t">int</span>)[]
+    <span onmouseout="hideTip(event, 'fs20', 25)" onmouseover="showTip(event, 'fs20', 25)" class="i">Raised</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs19', 26)" onmouseover="showTip(event, 'fs19', 26)" class="t">int</span> 
+    <span onmouseout="hideTip(event, 'fs21', 27)" onmouseover="showTip(event, 'fs21', 27)" class="i">Complete</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs22', 28)" onmouseover="showTip(event, 'fs22', 28)" class="t">bool</span>
+    <span onmouseout="hideTip(event, 'fs23', 29)" onmouseover="showTip(event, 'fs23', 29)" class="i">Removed</span> <span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 30)" onmouseover="showTip(event, 'fs14', 30)" class="t">DateTime</span> <span onmouseout="hideTip(event, 'fs17', 31)" onmouseover="showTip(event, 'fs17', 31)" class="t">option</span> }
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs24', 32)" onmouseover="showTip(event, 'fs24', 32)" class="f">parseDonations</span> (<span onmouseout="hideTip(event, 'fs25', 33)" onmouseover="showTip(event, 'fs25', 33)" class="i">s</span><span class="o">:</span><span onmouseout="hideTip(event, 'fs11', 34)" onmouseover="showTip(event, 'fs11', 34)" class="t">string</span>) <span class="o">=</span>
+  <span onmouseout="hideTip(event, 'fs25', 35)" onmouseover="showTip(event, 'fs25', 35)" class="i">s</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs26', 36)" onmouseover="showTip(event, 'fs26', 36)" class="f">Split</span>([|<span class="s">&#39;/&#39;</span>|], <span onmouseout="hideTip(event, 'fs27', 37)" onmouseover="showTip(event, 'fs27', 37)" class="t">StringSplitOptions</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs28', 38)" onmouseover="showTip(event, 'fs28', 38)" class="i">RemoveEmptyEntries</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 39)" onmouseover="showTip(event, 'fs29', 39)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs30', 40)" onmouseover="showTip(event, 'fs30', 40)" class="f">map</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs25', 41)" onmouseover="showTip(event, 'fs25', 41)" class="i">s</span> <span class="k">-&gt;</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs31', 42)" onmouseover="showTip(event, 'fs31', 42)" class="i">kv</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs25', 43)" onmouseover="showTip(event, 'fs25', 43)" class="i">s</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs26', 44)" onmouseover="showTip(event, 'fs26', 44)" class="f">Split</span>(<span class="s">&#39; &#39;</span>)
+    <span onmouseout="hideTip(event, 'fs14', 45)" onmouseover="showTip(event, 'fs14', 45)" class="t">DateTime</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs32', 46)" onmouseover="showTip(event, 'fs32', 46)" class="f">Parse</span> <span onmouseout="hideTip(event, 'fs31', 47)" onmouseover="showTip(event, 'fs31', 47)" class="i">kv</span><span class="o">.</span>[<span class="n">0</span>], <span onmouseout="hideTip(event, 'fs19', 48)" onmouseover="showTip(event, 'fs19', 48)" class="f">int</span> <span onmouseout="hideTip(event, 'fs31', 49)" onmouseover="showTip(event, 'fs31', 49)" class="i">kv</span><span class="o">.</span>[<span class="n">1</span>])
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs33', 50)" onmouseover="showTip(event, 'fs33', 50)" class="f">previousSunday</span> (<span onmouseout="hideTip(event, 'fs34', 51)" onmouseover="showTip(event, 'fs34', 51)" class="i">d</span><span class="o">:</span><span onmouseout="hideTip(event, 'fs14', 52)" onmouseover="showTip(event, 'fs14', 52)" class="t">DateTime</span>) <span class="o">=</span> 
+  <span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs35', 53)" onmouseover="showTip(event, 'fs35', 53)" class="v">d</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs34', 54)" onmouseover="showTip(event, 'fs34', 54)" class="i">d</span>
+  <span class="k">while</span> <span onmouseout="hideTip(event, 'fs35', 55)" onmouseover="showTip(event, 'fs35', 55)" class="v">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs36', 56)" onmouseover="showTip(event, 'fs36', 56)" class="i">DayOfWeek</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs37', 57)" onmouseover="showTip(event, 'fs37', 57)" class="t">DayOfWeek</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs38', 58)" onmouseover="showTip(event, 'fs38', 58)" class="i">Sunday</span> <span class="k">do</span> <span onmouseout="hideTip(event, 'fs35', 59)" onmouseover="showTip(event, 'fs35', 59)" class="v">d</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs35', 60)" onmouseover="showTip(event, 'fs35', 60)" class="v">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs39', 61)" onmouseover="showTip(event, 'fs39', 61)" class="f">AddDays</span>(<span class="o">-</span><span class="n">1.</span>)
+  <span onmouseout="hideTip(event, 'fs35', 62)" onmouseover="showTip(event, 'fs35', 62)" class="v">d</span>
+    
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs40', 63)" onmouseover="showTip(event, 'fs40', 63)" class="i">merged</span> <span class="o">=</span> 
+  <span onmouseout="hideTip(event, 'fs41', 64)" onmouseover="showTip(event, 'fs41', 64)" class="t">Frame</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs42', 65)" onmouseover="showTip(event, 'fs42', 65)" class="f">ReadCsv</span>(<span class="s">&quot;../outputs/merged.csv&quot;</span>)<span class="o">.</span><span class="i">Rows</span><span class="o">.</span><span class="i">Values</span> 
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 66)" onmouseover="showTip(event, 'fs43', 66)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs44', 67)" onmouseover="showTip(event, 'fs44', 67)" class="f">choose</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs45', 68)" onmouseover="showTip(event, 'fs45', 68)" class="i">r</span> <span class="k">-&gt;</span>
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs46', 69)" onmouseover="showTip(event, 'fs46', 69)" class="f">not</span> (<span onmouseout="hideTip(event, 'fs45', 70)" onmouseover="showTip(event, 'fs45', 70)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs47', 71)" onmouseover="showTip(event, 'fs47', 71)" class="f">TryGet</span>(<span class="s">&quot;Created&quot;</span>)<span class="o">.</span><span class="i">HasValue</span>) <span class="k">then</span> <span onmouseout="hideTip(event, 'fs48', 72)" onmouseover="showTip(event, 'fs48', 72)" class="p">None</span> <span class="k">else</span>
+    { <span class="i">Source</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 73)" onmouseover="showTip(event, 'fs45', 73)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 74)" onmouseover="showTip(event, 'fs49', 74)" class="f">GetAs</span> <span class="s">&quot;Source&quot;</span>; <span onmouseout="hideTip(event, 'fs50', 75)" onmouseover="showTip(event, 'fs50', 75)" class="i">Link</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 76)" onmouseover="showTip(event, 'fs45', 76)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 77)" onmouseover="showTip(event, 'fs49', 77)" class="f">GetAs</span> <span class="s">&quot;Link&quot;</span>; <span class="i">Created</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 78)" onmouseover="showTip(event, 'fs45', 78)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 79)" onmouseover="showTip(event, 'fs49', 79)" class="f">GetAs</span> <span class="s">&quot;Created&quot;</span>
+      <span class="i">MostRecentDonation</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 80)" onmouseover="showTip(event, 'fs45', 80)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs51', 81)" onmouseover="showTip(event, 'fs51', 81)" class="f">TryGetAs</span> <span class="s">&quot;MostRecentDonation&quot;</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs52', 82)" onmouseover="showTip(event, 'fs52', 82)" class="t">OptionalValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs53', 83)" onmouseover="showTip(event, 'fs53', 83)" class="f">asOption</span> 
+      <span class="i">Raised</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 84)" onmouseover="showTip(event, 'fs45', 84)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 85)" onmouseover="showTip(event, 'fs49', 85)" class="f">GetAs</span> <span class="s">&quot;Raised&quot;</span>; <span onmouseout="hideTip(event, 'fs54', 86)" onmouseover="showTip(event, 'fs54', 86)" class="i">Complete</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 87)" onmouseover="showTip(event, 'fs45', 87)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 88)" onmouseover="showTip(event, 'fs49', 88)" class="f">GetAs</span> <span class="s">&quot;Complete&quot;</span>; 
+      <span class="i">Donations</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 89)" onmouseover="showTip(event, 'fs45', 89)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 90)" onmouseover="showTip(event, 'fs49', 90)" class="f">GetAs</span> <span class="s">&quot;Donations&quot;</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs24', 91)" onmouseover="showTip(event, 'fs24', 91)" class="f">parseDonations</span>; 
+      <span class="i">Removed</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs45', 92)" onmouseover="showTip(event, 'fs45', 92)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs51', 93)" onmouseover="showTip(event, 'fs51', 93)" class="f">TryGetAs</span> <span class="s">&quot;Removed&quot;</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs52', 94)" onmouseover="showTip(event, 'fs52', 94)" class="t">OptionalValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs53', 95)" onmouseover="showTip(event, 'fs53', 95)" class="f">asOption</span> 
+      <span class="i">Week</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs33', 96)" onmouseover="showTip(event, 'fs33', 96)" class="f">previousSunday</span> (<span onmouseout="hideTip(event, 'fs45', 97)" onmouseover="showTip(event, 'fs45', 97)" class="i">r</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 98)" onmouseover="showTip(event, 'fs49', 98)" class="f">GetAs</span> <span class="s">&quot;Created&quot;</span>) } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs55', 99)" onmouseover="showTip(event, 'fs55', 99)" class="p">Some</span> ) 
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 100)" onmouseover="showTip(event, 'fs29', 100)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs56', 101)" onmouseover="showTip(event, 'fs56', 101)" class="f">ofSeq</span>
+</code></pre></td>
+</tr>
+</table>
+<h2>Fundraisers in our dataset</h2>
+<p>First, let's look at the number of fundraisers started in a given week. We only look
+at fundraisers started after February 2020. Note that this data is incomplete, because
+we do not have information on short-lived fundraisers before May! We may see a peak
+in May, but that is wrong, because we are missing some fundraisers before then.
+Note that this also idenfies weeks by Sunday - this is to align with our scrapes that
+are done on Sundays.</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span onmouseout="hideTip(event, 'fs40', 102)" onmouseover="showTip(event, 'fs40', 102)" class="i">merged</span> 
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 103)" onmouseover="showTip(event, 'fs29', 103)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 104)" onmouseover="showTip(event, 'fs57', 104)" class="f">filter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 105)" onmouseover="showTip(event, 'fs58', 105)" class="i">d</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs58', 106)" onmouseover="showTip(event, 'fs58', 106)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 107)" onmouseover="showTip(event, 'fs13', 107)" class="i">Created</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 108)" onmouseover="showTip(event, 'fs59', 108)" class="i">Year</span> <span class="o">=</span> <span class="n">2020</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs58', 109)" onmouseover="showTip(event, 'fs58', 109)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 110)" onmouseover="showTip(event, 'fs13', 110)" class="i">Created</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs60', 111)" onmouseover="showTip(event, 'fs60', 111)" class="i">Month</span> <span class="o">&gt;</span> <span class="n">2</span>)
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 112)" onmouseover="showTip(event, 'fs29', 112)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 113)" onmouseover="showTip(event, 'fs61', 113)" class="f">countBy</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 114)" onmouseover="showTip(event, 'fs58', 114)" class="i">d</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs58', 115)" onmouseover="showTip(event, 'fs58', 115)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs15', 116)" onmouseover="showTip(event, 'fs15', 116)" class="i">Week</span>)
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 117)" onmouseover="showTip(event, 'fs62', 117)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 118)" onmouseover="showTip(event, 'fs63', 118)" class="f">Column</span>
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><script type="text/javascript">
+    google.charts.setOnLoadCallback(drawChart);
+            function drawChart() {
+                if ("")
+                    google.visualization.mapsApiKey = ""
+
+                var data = new google.visualization.DataTable({"cols": [{"type": "datetime" ,"id": "Column 1" ,"label": "Column 1" }, {"type": "number" ,"id": "Column 2" ,"label": "Column 2" }], "rows" : [{"c" : [{"v": "Date(2020, 2, 15, 0, 0, 0)"}, {"v": 115}]}, {"c" : [{"v": "Date(2020, 2, 22, 0, 0, 0)"}, {"v": 112}]}, {"c" : [{"v": "Date(2020, 3, 19, 0, 0, 0)"}, {"v": 166}]}, {"c" : [{"v": "Date(2020, 3, 26, 0, 0, 0)"}, {"v": 233}]}, {"c" : [{"v": "Date(2020, 2, 29, 0, 0, 0)"}, {"v": 135}]}, {"c" : [{"v": "Date(2020, 3, 5, 0, 0, 0)"}, {"v": 95}]}, {"c" : [{"v": "Date(2020, 4, 3, 0, 0, 0)"}, {"v": 202}]}, {"c" : [{"v": "Date(2020, 2, 8, 0, 0, 0)"}, {"v": 23}]}, {"c" : [{"v": "Date(2020, 3, 12, 0, 0, 0)"}, {"v": 146}]}, {"c" : [{"v": "Date(2020, 4, 10, 0, 0, 0)"}, {"v": 179}]}, {"c" : [{"v": "Date(2020, 4, 17, 0, 0, 0)"}, {"v": 130}]}, {"c" : [{"v": "Date(2020, 4, 24, 0, 0, 0)"}, {"v": 78}]}, {"c" : [{"v": "Date(2020, 4, 31, 0, 0, 0)"}, {"v": 75}]}, {"c" : [{"v": "Date(2020, 5, 7, 0, 0, 0)"}, {"v": 75}]}, {"c" : [{"v": "Date(2020, 5, 14, 0, 0, 0)"}, {"v": 99}]}, {"c" : [{"v": "Date(2020, 2, 1, 0, 0, 0)"}, {"v": 12}]}, {"c" : [{"v": "Date(2020, 5, 21, 0, 0, 0)"}, {"v": 70}]}, {"c" : [{"v": "Date(2020, 5, 28, 0, 0, 0)"}, {"v": 53}]}, {"c" : [{"v": "Date(2020, 6, 5, 0, 0, 0)"}, {"v": 42}]}, {"c" : [{"v": "Date(2020, 6, 12, 0, 0, 0)"}, {"v": 42}]}, {"c" : [{"v": "Date(2020, 6, 19, 0, 0, 0)"}, {"v": 30}]}, {"c" : [{"v": "Date(2020, 6, 26, 0, 0, 0)"}, {"v": 2}]}]});
+
+                
+
+                var options = {"backgroundColor":{"fill":"transparent"},"chartArea":{"backgroundColor":{"fill":"#f4f4f4"}},"colors":["#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5"],"hAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"legend":{"position":"none","textStyle":{"color":"#000000"}},"titleTextStyle":{"color":"#000000"},"vAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"datalessRegionColor":"#fdfdfd"} 
+
+                var chart = new google.visualization.ColumnChart(document.getElementById('927c9cb9-154b-4e3e-b5f1-fa9098b14fe8'));
+                chart.draw(data, options);
+            }
+</script>
+<div id="927c9cb9-154b-4e3e-b5f1-fa9098b14fe8" style="width: 800px; height: 450px;"></div></div>
+<h2>Fundraisers by their length</h2>
+<p>We will now calculate the number of fundraisers in each week based on their type
+(short-lived, regular, long-lived). Note that this will leave out some fundraisers
+at the end of our date range, because we cannot tell what type will they be!</p>
+<p>This will need some data processing - the key function here is <code>byAge</code>, which filters
+data and returns only fundraisers that have an age in the specified range.</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs64', 119)" onmouseover="showTip(event, 'fs64', 119)" class="i">firstScrape</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 120)" onmouseover="showTip(event, 'fs14', 120)" class="t">DateTime</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs32', 121)" onmouseover="showTip(event, 'fs32', 121)" class="f">Parse</span> <span class="s">&quot;2020-05-17&quot;</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs65', 122)" onmouseover="showTip(event, 'fs65', 122)" class="i">lastScrape</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 123)" onmouseover="showTip(event, 'fs14', 123)" class="t">DateTime</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs32', 124)" onmouseover="showTip(event, 'fs32', 124)" class="f">Parse</span> <span class="s">&quot;2020-08-23&quot;</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs66', 125)" onmouseover="showTip(event, 'fs66', 125)" class="f">weeks</span> <span onmouseout="hideTip(event, 'fs67', 126)" onmouseover="showTip(event, 'fs67', 126)" class="i">n</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs68', 127)" onmouseover="showTip(event, 'fs68', 127)" class="t">TimeSpan</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs69', 128)" onmouseover="showTip(event, 'fs69', 128)" class="f">FromDays</span>(<span class="n">7.0</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs70', 129)" onmouseover="showTip(event, 'fs70', 129)" class="f">float</span> <span onmouseout="hideTip(event, 'fs67', 130)" onmouseover="showTip(event, 'fs67', 130)" class="i">n</span>)
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs71', 131)" onmouseover="showTip(event, 'fs71', 131)" class="f">day</span> <span onmouseout="hideTip(event, 'fs67', 132)" onmouseover="showTip(event, 'fs67', 132)" class="i">n</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs68', 133)" onmouseover="showTip(event, 'fs68', 133)" class="t">TimeSpan</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs69', 134)" onmouseover="showTip(event, 'fs69', 134)" class="f">FromDays</span>(<span onmouseout="hideTip(event, 'fs70', 135)" onmouseover="showTip(event, 'fs70', 135)" class="f">float</span> <span onmouseout="hideTip(event, 'fs67', 136)" onmouseover="showTip(event, 'fs67', 136)" class="i">n</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs72', 137)" onmouseover="showTip(event, 'fs72', 137)" class="f">byAge</span> <span onmouseout="hideTip(event, 'fs73', 138)" onmouseover="showTip(event, 'fs73', 138)" class="i">lo</span> <span onmouseout="hideTip(event, 'fs74', 139)" onmouseover="showTip(event, 'fs74', 139)" class="i">hi</span> <span onmouseout="hideTip(event, 'fs75', 140)" onmouseover="showTip(event, 'fs75', 140)" class="i">data</span> <span class="o">=</span> 
+  <span onmouseout="hideTip(event, 'fs75', 141)" onmouseover="showTip(event, 'fs75', 141)" class="i">data</span>
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 142)" onmouseover="showTip(event, 'fs29', 142)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 143)" onmouseover="showTip(event, 'fs57', 143)" class="f">filter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 144)" onmouseover="showTip(event, 'fs58', 144)" class="i">d</span> <span class="k">-&gt;</span> 
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs74', 145)" onmouseover="showTip(event, 'fs74', 145)" class="i">hi</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs48', 146)" onmouseover="showTip(event, 'fs48', 146)" class="p">None</span> <span class="k">then</span>
+      <span class="c">// Has been around for at least &#39;lo&#39; days</span>
+      <span class="k">if</span> <span onmouseout="hideTip(event, 'fs58', 147)" onmouseover="showTip(event, 'fs58', 147)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs23', 148)" onmouseover="showTip(event, 'fs23', 148)" class="i">Removed</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs48', 149)" onmouseover="showTip(event, 'fs48', 149)" class="p">None</span> <span class="k">then</span> (<span onmouseout="hideTip(event, 'fs65', 150)" onmouseover="showTip(event, 'fs65', 150)" class="i">lastScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs58', 151)" onmouseover="showTip(event, 'fs58', 151)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 152)" onmouseover="showTip(event, 'fs13', 152)" class="i">Created</span>)<span class="o">.</span><span class="i">TotalDays</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs70', 153)" onmouseover="showTip(event, 'fs70', 153)" class="f">float</span> <span onmouseout="hideTip(event, 'fs73', 154)" onmouseover="showTip(event, 'fs73', 154)" class="i">lo</span>
+      <span class="k">else</span> (<span onmouseout="hideTip(event, 'fs58', 155)" onmouseover="showTip(event, 'fs58', 155)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs23', 156)" onmouseover="showTip(event, 'fs23', 156)" class="i">Removed</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 157)" onmouseover="showTip(event, 'fs76', 157)" class="i">Value</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs58', 158)" onmouseover="showTip(event, 'fs58', 158)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 159)" onmouseover="showTip(event, 'fs13', 159)" class="i">Created</span>)<span class="o">.</span><span class="i">TotalDays</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs70', 160)" onmouseover="showTip(event, 'fs70', 160)" class="f">float</span> <span onmouseout="hideTip(event, 'fs73', 161)" onmouseover="showTip(event, 'fs73', 161)" class="i">lo</span>
+    <span class="k">else</span> 
+      <span class="c">// Has been around between &#39;lo&#39; and &#39;hi&#39; days</span>
+      <span class="k">if</span> <span onmouseout="hideTip(event, 'fs58', 162)" onmouseover="showTip(event, 'fs58', 162)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs23', 163)" onmouseover="showTip(event, 'fs23', 163)" class="i">Removed</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs48', 164)" onmouseover="showTip(event, 'fs48', 164)" class="p">None</span> <span class="k">then</span> <span class="k">false</span>
+      <span class="k">else</span> 
+        (<span onmouseout="hideTip(event, 'fs58', 165)" onmouseover="showTip(event, 'fs58', 165)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs23', 166)" onmouseover="showTip(event, 'fs23', 166)" class="i">Removed</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 167)" onmouseover="showTip(event, 'fs76', 167)" class="i">Value</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs58', 168)" onmouseover="showTip(event, 'fs58', 168)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 169)" onmouseover="showTip(event, 'fs13', 169)" class="i">Created</span>)<span class="o">.</span><span class="i">TotalDays</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs70', 170)" onmouseover="showTip(event, 'fs70', 170)" class="f">float</span> <span onmouseout="hideTip(event, 'fs73', 171)" onmouseover="showTip(event, 'fs73', 171)" class="i">lo</span> <span class="o">&amp;&amp;</span> 
+        (<span onmouseout="hideTip(event, 'fs58', 172)" onmouseover="showTip(event, 'fs58', 172)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs23', 173)" onmouseover="showTip(event, 'fs23', 173)" class="i">Removed</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 174)" onmouseover="showTip(event, 'fs76', 174)" class="i">Value</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs58', 175)" onmouseover="showTip(event, 'fs58', 175)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 176)" onmouseover="showTip(event, 'fs13', 176)" class="i">Created</span>)<span class="o">.</span><span class="i">TotalDays</span> <span class="o">&lt;=</span> <span onmouseout="hideTip(event, 'fs70', 177)" onmouseover="showTip(event, 'fs70', 177)" class="f">float</span> <span onmouseout="hideTip(event, 'fs74', 178)" onmouseover="showTip(event, 'fs74', 178)" class="i">hi</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs77', 179)" onmouseover="showTip(event, 'fs77', 179)" class="i">Value</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs78', 180)" onmouseover="showTip(event, 'fs78', 180)" class="f">keys</span> <span onmouseout="hideTip(event, 'fs79', 181)" onmouseover="showTip(event, 'fs79', 181)" class="i">data</span> <span class="o">=</span> 
+  [ <span class="k">for</span> <span onmouseout="hideTip(event, 'fs58', 182)" onmouseover="showTip(event, 'fs58', 182)" class="i">d</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs79', 183)" onmouseover="showTip(event, 'fs79', 183)" class="i">data</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs58', 184)" onmouseover="showTip(event, 'fs58', 184)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs15', 185)" onmouseover="showTip(event, 'fs15', 185)" class="i">Week</span> ] <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 186)" onmouseover="showTip(event, 'fs43', 186)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs80', 187)" onmouseover="showTip(event, 'fs80', 187)" class="f">distinct</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 188)" onmouseover="showTip(event, 'fs43', 188)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs81', 189)" onmouseover="showTip(event, 'fs81', 189)" class="f">sort</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs82', 190)" onmouseover="showTip(event, 'fs82', 190)" class="f">realign</span> <span onmouseout="hideTip(event, 'fs83', 191)" onmouseover="showTip(event, 'fs83', 191)" class="i">keys</span> <span onmouseout="hideTip(event, 'fs84', 192)" onmouseover="showTip(event, 'fs84', 192)" class="i">data</span> <span class="o">=</span> 
+  <span class="k">let</span> <span onmouseout="hideTip(event, 'fs85', 193)" onmouseover="showTip(event, 'fs85', 193)" class="i">lookup</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs86', 194)" onmouseover="showTip(event, 'fs86', 194)" class="f">dict</span> <span onmouseout="hideTip(event, 'fs84', 195)" onmouseover="showTip(event, 'fs84', 195)" class="i">data</span> 
+  [ <span class="k">for</span> <span onmouseout="hideTip(event, 'fs87', 196)" onmouseover="showTip(event, 'fs87', 196)" class="i">k</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs83', 197)" onmouseover="showTip(event, 'fs83', 197)" class="i">keys</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 198)" onmouseover="showTip(event, 'fs87', 198)" class="i">k</span>, <span class="k">if</span> <span onmouseout="hideTip(event, 'fs85', 199)" onmouseover="showTip(event, 'fs85', 199)" class="i">lookup</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs88', 200)" onmouseover="showTip(event, 'fs88', 200)" class="f">ContainsKey</span> <span onmouseout="hideTip(event, 'fs87', 201)" onmouseover="showTip(event, 'fs87', 201)" class="i">k</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs85', 202)" onmouseover="showTip(event, 'fs85', 202)" class="i">lookup</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs87', 203)" onmouseover="showTip(event, 'fs87', 203)" class="i">k</span>] <span class="k">else</span> <span class="n">0</span> ]
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs89', 204)" onmouseover="showTip(event, 'fs89', 204)" class="f">countsByAge</span> <span onmouseout="hideTip(event, 'fs73', 205)" onmouseover="showTip(event, 'fs73', 205)" class="i">lo</span> <span onmouseout="hideTip(event, 'fs74', 206)" onmouseover="showTip(event, 'fs74', 206)" class="i">hi</span> <span onmouseout="hideTip(event, 'fs75', 207)" onmouseover="showTip(event, 'fs75', 207)" class="i">data</span> <span class="o">=</span> 
+  <span onmouseout="hideTip(event, 'fs72', 208)" onmouseover="showTip(event, 'fs72', 208)" class="f">byAge</span> <span onmouseout="hideTip(event, 'fs73', 209)" onmouseover="showTip(event, 'fs73', 209)" class="i">lo</span> <span onmouseout="hideTip(event, 'fs74', 210)" onmouseover="showTip(event, 'fs74', 210)" class="i">hi</span> <span onmouseout="hideTip(event, 'fs75', 211)" onmouseover="showTip(event, 'fs75', 211)" class="i">data</span>
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 212)" onmouseover="showTip(event, 'fs29', 212)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 213)" onmouseover="showTip(event, 'fs61', 213)" class="f">countBy</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 214)" onmouseover="showTip(event, 'fs58', 214)" class="i">d</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs58', 215)" onmouseover="showTip(event, 'fs58', 215)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs15', 216)" onmouseover="showTip(event, 'fs15', 216)" class="i">Week</span>)
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs82', 217)" onmouseover="showTip(event, 'fs82', 217)" class="f">realign</span> (<span onmouseout="hideTip(event, 'fs78', 218)" onmouseover="showTip(event, 'fs78', 218)" class="f">keys</span> <span onmouseout="hideTip(event, 'fs75', 219)" onmouseover="showTip(event, 'fs75', 219)" class="i">data</span>)
+</code></pre></td>
+</tr>
+</table>
+<p>Now we can use the above helpers to do some visualizations. First, let's look at the
+data, but now based on the type of fundraiser. This is the same data as before (with
+missing data before May). There are some more fundraisers removed from July and later,
+because we do not yet know their kind (there has not been enough time to tell).</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+<span class="l">7: </span>
+<span class="l">8: </span>
+<span class="l">9: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs90', 220)" onmouseover="showTip(event, 'fs90', 220)" class="i">recent</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 221)" onmouseover="showTip(event, 'fs40', 221)" class="i">merged</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 222)" onmouseover="showTip(event, 'fs29', 222)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 223)" onmouseover="showTip(event, 'fs57', 223)" class="f">filter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 224)" onmouseover="showTip(event, 'fs58', 224)" class="i">d</span> <span class="k">-&gt;</span> 
+  <span onmouseout="hideTip(event, 'fs58', 225)" onmouseover="showTip(event, 'fs58', 225)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 226)" onmouseover="showTip(event, 'fs13', 226)" class="i">Created</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 227)" onmouseover="showTip(event, 'fs59', 227)" class="i">Year</span> <span class="o">=</span> <span class="n">2020</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs58', 228)" onmouseover="showTip(event, 'fs58', 228)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 229)" onmouseover="showTip(event, 'fs13', 229)" class="i">Created</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs60', 230)" onmouseover="showTip(event, 'fs60', 230)" class="i">Month</span> <span class="o">&gt;</span> <span class="n">2</span>)
+
+[ <span onmouseout="hideTip(event, 'fs89', 231)" onmouseover="showTip(event, 'fs89', 231)" class="f">countsByAge</span> <span class="n">0</span> (<span onmouseout="hideTip(event, 'fs55', 232)" onmouseover="showTip(event, 'fs55', 232)" class="p">Some</span> <span class="n">28</span>) <span onmouseout="hideTip(event, 'fs90', 233)" onmouseover="showTip(event, 'fs90', 233)" class="i">recent</span> 
+  <span onmouseout="hideTip(event, 'fs89', 234)" onmouseover="showTip(event, 'fs89', 234)" class="f">countsByAge</span> <span class="n">29</span> (<span onmouseout="hideTip(event, 'fs55', 235)" onmouseover="showTip(event, 'fs55', 235)" class="p">Some</span> <span class="n">56</span>) <span onmouseout="hideTip(event, 'fs90', 236)" onmouseover="showTip(event, 'fs90', 236)" class="i">recent</span> 
+  <span onmouseout="hideTip(event, 'fs89', 237)" onmouseover="showTip(event, 'fs89', 237)" class="f">countsByAge</span> <span class="n">57</span> <span onmouseout="hideTip(event, 'fs48', 238)" onmouseover="showTip(event, 'fs48', 238)" class="p">None</span> <span onmouseout="hideTip(event, 'fs90', 239)" onmouseover="showTip(event, 'fs90', 239)" class="i">recent</span> ]
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 240)" onmouseover="showTip(event, 'fs62', 240)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 241)" onmouseover="showTip(event, 'fs63', 241)" class="i">Column</span>
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 242)" onmouseover="showTip(event, 'fs62', 242)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs91', 243)" onmouseover="showTip(event, 'fs91', 243)" class="f">WithOptions</span>(<span onmouseout="hideTip(event, 'fs92', 244)" onmouseover="showTip(event, 'fs92', 244)" class="t">Options</span>(<span class="i">isStacked</span><span class="o">=</span><span class="k">true</span>)) 
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 245)" onmouseover="showTip(event, 'fs62', 245)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs93', 246)" onmouseover="showTip(event, 'fs93', 246)" class="f">WithLabels</span> [<span class="s">&quot;0-4 weeks&quot;</span>; <span class="s">&quot;4-8 weeks&quot;</span>; <span class="s">&quot;&gt;8 weeks&quot;</span>]
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><script type="text/javascript">
+    google.charts.setOnLoadCallback(drawChart);
+            function drawChart() {
+                if ("")
+                    google.visualization.mapsApiKey = ""
+
+                var data = new google.visualization.DataTable({"cols": [{"type": "datetime" ,"id": "Column 1" ,"label": "Column 1" }, {"type": "number" ,"id": "0-4 weeks" ,"label": "0-4 weeks" }, {"type": "number" ,"id": "4-8 weeks" ,"label": "4-8 weeks" }, {"type": "number" ,"id": ">8 weeks" ,"label": ">8 weeks" }], "rows" : [{"c" : [{"v": "Date(2020, 2, 1, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 12}]}, {"c" : [{"v": "Date(2020, 2, 8, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 23}]}, {"c" : [{"v": "Date(2020, 2, 15, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 115}]}, {"c" : [{"v": "Date(2020, 2, 22, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 112}]}, {"c" : [{"v": "Date(2020, 2, 29, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 135}]}, {"c" : [{"v": "Date(2020, 3, 5, 0, 0, 0)"}, {"v": 0}, {"v": 2}, {"v": 93}]}, {"c" : [{"v": "Date(2020, 3, 12, 0, 0, 0)"}, {"v": 0}, {"v": 6}, {"v": 140}]}, {"c" : [{"v": "Date(2020, 3, 19, 0, 0, 0)"}, {"v": 0}, {"v": 14}, {"v": 152}]}, {"c" : [{"v": "Date(2020, 3, 26, 0, 0, 0)"}, {"v": 0}, {"v": 60}, {"v": 173}]}, {"c" : [{"v": "Date(2020, 4, 3, 0, 0, 0)"}, {"v": 83}, {"v": 15}, {"v": 104}]}, {"c" : [{"v": "Date(2020, 4, 10, 0, 0, 0)"}, {"v": 76}, {"v": 24}, {"v": 79}]}, {"c" : [{"v": "Date(2020, 4, 17, 0, 0, 0)"}, {"v": 46}, {"v": 13}, {"v": 71}]}, {"c" : [{"v": "Date(2020, 4, 24, 0, 0, 0)"}, {"v": 17}, {"v": 17}, {"v": 44}]}, {"c" : [{"v": "Date(2020, 4, 31, 0, 0, 0)"}, {"v": 24}, {"v": 7}, {"v": 44}]}, {"c" : [{"v": "Date(2020, 5, 7, 0, 0, 0)"}, {"v": 25}, {"v": 11}, {"v": 39}]}, {"c" : [{"v": "Date(2020, 5, 14, 0, 0, 0)"}, {"v": 60}, {"v": 5}, {"v": 34}]}, {"c" : [{"v": "Date(2020, 5, 21, 0, 0, 0)"}, {"v": 26}, {"v": 10}, {"v": 34}]}, {"c" : [{"v": "Date(2020, 5, 28, 0, 0, 0)"}, {"v": 28}, {"v": 0}, {"v": 0}]}, {"c" : [{"v": "Date(2020, 6, 5, 0, 0, 0)"}, {"v": 14}, {"v": 0}, {"v": 0}]}, {"c" : [{"v": "Date(2020, 6, 12, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 0}]}, {"c" : [{"v": "Date(2020, 6, 19, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 0}]}, {"c" : [{"v": "Date(2020, 6, 26, 0, 0, 0)"}, {"v": 0}, {"v": 0}, {"v": 0}]}]});
+
+                
+
+                var options = {"backgroundColor":{"fill":"transparent"},"chartArea":{"backgroundColor":{"fill":"#f4f4f4"}},"colors":["#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5"],"hAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"isStacked":true,"legend":{"position":"right","textStyle":{"color":"#000000"}},"titleTextStyle":{"color":"#000000"},"vAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"datalessRegionColor":"#fdfdfd"} 
+
+                var chart = new google.visualization.ColumnChart(document.getElementById('d058a41c-cb42-473e-a4fb-89151a36f1a2'));
+                chart.draw(data, options);
+            }
+</script>
+<div id="d058a41c-cb42-473e-a4fb-89151a36f1a2" style="width: 800px; height: 450px;"></div></div>
+<p>There are several weeks for which we have full data on all three kinds of fundraisers.
+These are roughly weeks from 1 week before we started scraping (because all fundraisers
+stay at least for a week) until 8 weeks before our last scrape (so that we can identify
+kinds of fundraisers started at this point). So, we have full data for this range:</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs94', 247)" onmouseover="showTip(event, 'fs94', 247)" class="i">valid</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 248)" onmouseover="showTip(event, 'fs40', 248)" class="i">merged</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 249)" onmouseover="showTip(event, 'fs29', 249)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 250)" onmouseover="showTip(event, 'fs57', 250)" class="f">filter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 251)" onmouseover="showTip(event, 'fs58', 251)" class="i">d</span> <span class="k">-&gt;</span> 
+  <span onmouseout="hideTip(event, 'fs58', 252)" onmouseover="showTip(event, 'fs58', 252)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 253)" onmouseover="showTip(event, 'fs13', 253)" class="i">Created</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 254)" onmouseover="showTip(event, 'fs64', 254)" class="i">firstScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs66', 255)" onmouseover="showTip(event, 'fs66', 255)" class="f">weeks</span> <span class="n">1</span> <span class="o">&amp;&amp;</span>
+  <span onmouseout="hideTip(event, 'fs58', 256)" onmouseover="showTip(event, 'fs58', 256)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 257)" onmouseover="showTip(event, 'fs13', 257)" class="i">Created</span> <span class="o">&lt;</span> <span onmouseout="hideTip(event, 'fs65', 258)" onmouseover="showTip(event, 'fs65', 258)" class="i">lastScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs66', 259)" onmouseover="showTip(event, 'fs66', 259)" class="f">weeks</span> <span class="n">8</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs71', 260)" onmouseover="showTip(event, 'fs71', 260)" class="f">day</span> <span class="n">1</span> )
+
+[ <span onmouseout="hideTip(event, 'fs89', 261)" onmouseover="showTip(event, 'fs89', 261)" class="f">countsByAge</span> <span class="n">0</span> (<span onmouseout="hideTip(event, 'fs55', 262)" onmouseover="showTip(event, 'fs55', 262)" class="p">Some</span> <span class="n">28</span>) <span onmouseout="hideTip(event, 'fs94', 263)" onmouseover="showTip(event, 'fs94', 263)" class="i">valid</span>
+  <span onmouseout="hideTip(event, 'fs89', 264)" onmouseover="showTip(event, 'fs89', 264)" class="f">countsByAge</span> <span class="n">29</span> (<span onmouseout="hideTip(event, 'fs55', 265)" onmouseover="showTip(event, 'fs55', 265)" class="p">Some</span> <span class="n">56</span>) <span onmouseout="hideTip(event, 'fs94', 266)" onmouseover="showTip(event, 'fs94', 266)" class="i">valid</span>
+  <span onmouseout="hideTip(event, 'fs89', 267)" onmouseover="showTip(event, 'fs89', 267)" class="f">countsByAge</span> <span class="n">57</span> <span onmouseout="hideTip(event, 'fs48', 268)" onmouseover="showTip(event, 'fs48', 268)" class="p">None</span> <span onmouseout="hideTip(event, 'fs94', 269)" onmouseover="showTip(event, 'fs94', 269)" class="i">valid</span> ]
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 270)" onmouseover="showTip(event, 'fs62', 270)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 271)" onmouseover="showTip(event, 'fs63', 271)" class="i">Column</span>
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 272)" onmouseover="showTip(event, 'fs62', 272)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs91', 273)" onmouseover="showTip(event, 'fs91', 273)" class="f">WithOptions</span>(<span onmouseout="hideTip(event, 'fs92', 274)" onmouseover="showTip(event, 'fs92', 274)" class="t">Options</span>(<span class="i">isStacked</span><span class="o">=</span><span class="k">true</span>)) 
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 275)" onmouseover="showTip(event, 'fs62', 275)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs93', 276)" onmouseover="showTip(event, 'fs93', 276)" class="f">WithLabels</span> [<span class="s">&quot;0-4 weeks&quot;</span>; <span class="s">&quot;4-8 weeks&quot;</span>; <span class="s">&quot;&gt;8 weeks&quot;</span>]
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><script type="text/javascript">
+    google.charts.setOnLoadCallback(drawChart);
+            function drawChart() {
+                if ("")
+                    google.visualization.mapsApiKey = ""
+
+                var data = new google.visualization.DataTable({"cols": [{"type": "datetime" ,"id": "Column 1" ,"label": "Column 1" }, {"type": "number" ,"id": "0-4 weeks" ,"label": "0-4 weeks" }, {"type": "number" ,"id": "4-8 weeks" ,"label": "4-8 weeks" }, {"type": "number" ,"id": ">8 weeks" ,"label": ">8 weeks" }], "rows" : [{"c" : [{"v": "Date(2020, 4, 10, 0, 0, 0)"}, {"v": 76}, {"v": 24}, {"v": 79}]}, {"c" : [{"v": "Date(2020, 4, 17, 0, 0, 0)"}, {"v": 46}, {"v": 13}, {"v": 71}]}, {"c" : [{"v": "Date(2020, 4, 24, 0, 0, 0)"}, {"v": 17}, {"v": 17}, {"v": 44}]}, {"c" : [{"v": "Date(2020, 4, 31, 0, 0, 0)"}, {"v": 24}, {"v": 7}, {"v": 44}]}, {"c" : [{"v": "Date(2020, 5, 7, 0, 0, 0)"}, {"v": 25}, {"v": 11}, {"v": 39}]}, {"c" : [{"v": "Date(2020, 5, 14, 0, 0, 0)"}, {"v": 60}, {"v": 5}, {"v": 34}]}, {"c" : [{"v": "Date(2020, 5, 21, 0, 0, 0)"}, {"v": 23}, {"v": 10}, {"v": 32}]}]});
+
+                
+
+                var options = {"backgroundColor":{"fill":"transparent"},"chartArea":{"backgroundColor":{"fill":"#f4f4f4"}},"colors":["#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5"],"hAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"isStacked":true,"legend":{"position":"right","textStyle":{"color":"#000000"}},"titleTextStyle":{"color":"#000000"},"vAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"datalessRegionColor":"#fdfdfd"} 
+
+                var chart = new google.visualization.ColumnChart(document.getElementById('e7f6ab45-af89-4d49-b2a7-648ed1a225e9'));
+                chart.draw(data, options);
+            }
+</script>
+<div id="e7f6ab45-af89-4d49-b2a7-648ed1a225e9" style="width: 800px; height: 450px;"></div></div>
+<h2>Calculating ratios of fundraiser types</h2>
+<p>Using data for the above range, we can calculate average ratio of different
+types of fundraisers. First, let's draw a bar chart of the ratios, so that
+we can see how much variance there is between different weeks.</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs95', 277)" onmouseover="showTip(event, 'fs95', 277)" class="i">ratios</span> <span class="o">=</span> 
+  <span onmouseout="hideTip(event, 'fs43', 278)" onmouseover="showTip(event, 'fs43', 278)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs96', 279)" onmouseover="showTip(event, 'fs96', 279)" class="f">zip3</span>
+    (<span onmouseout="hideTip(event, 'fs89', 280)" onmouseover="showTip(event, 'fs89', 280)" class="f">countsByAge</span> <span class="n">0</span> (<span onmouseout="hideTip(event, 'fs55', 281)" onmouseover="showTip(event, 'fs55', 281)" class="i">Some</span> <span class="n">28</span>) <span onmouseout="hideTip(event, 'fs94', 282)" onmouseover="showTip(event, 'fs94', 282)" class="i">valid</span>)
+    (<span onmouseout="hideTip(event, 'fs89', 283)" onmouseover="showTip(event, 'fs89', 283)" class="f">countsByAge</span> <span class="n">29</span> (<span onmouseout="hideTip(event, 'fs55', 284)" onmouseover="showTip(event, 'fs55', 284)" class="i">Some</span> <span class="n">56</span>) <span onmouseout="hideTip(event, 'fs94', 285)" onmouseover="showTip(event, 'fs94', 285)" class="i">valid</span>)
+    (<span onmouseout="hideTip(event, 'fs89', 286)" onmouseover="showTip(event, 'fs89', 286)" class="f">countsByAge</span> <span class="n">57</span> <span onmouseout="hideTip(event, 'fs48', 287)" onmouseover="showTip(event, 'fs48', 287)" class="i">None</span> <span onmouseout="hideTip(event, 'fs94', 288)" onmouseover="showTip(event, 'fs94', 288)" class="i">valid</span>)
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 289)" onmouseover="showTip(event, 'fs43', 289)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs97', 290)" onmouseover="showTip(event, 'fs97', 290)" class="f">map</span> (<span class="k">fun</span> ((<span onmouseout="hideTip(event, 'fs98', 291)" onmouseover="showTip(event, 'fs98', 291)" class="i">sd</span>, <span onmouseout="hideTip(event, 'fs99', 292)" onmouseover="showTip(event, 'fs99', 292)" class="i">s</span>), (<span onmouseout="hideTip(event, 'fs100', 293)" onmouseover="showTip(event, 'fs100', 293)" class="i">ld</span>, <span onmouseout="hideTip(event, 'fs101', 294)" onmouseover="showTip(event, 'fs101', 294)" class="i">l</span>), (<span onmouseout="hideTip(event, 'fs102', 295)" onmouseover="showTip(event, 'fs102', 295)" class="i">vd</span>, <span onmouseout="hideTip(event, 'fs103', 296)" onmouseover="showTip(event, 'fs103', 296)" class="i">v</span>)) <span class="k">-&gt;</span>
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs98', 297)" onmouseover="showTip(event, 'fs98', 297)" class="i">sd</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs100', 298)" onmouseover="showTip(event, 'fs100', 298)" class="i">ld</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs100', 299)" onmouseover="showTip(event, 'fs100', 299)" class="i">ld</span> <span class="o">&lt;&gt;</span> <span class="i">vd</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs104', 300)" onmouseover="showTip(event, 'fs104', 300)" class="f">failwith</span> <span class="s">&quot;Should not happen&quot;</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs105', 301)" onmouseover="showTip(event, 'fs105', 301)" class="i">tot</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs70', 302)" onmouseover="showTip(event, 'fs70', 302)" class="f">float</span> (<span onmouseout="hideTip(event, 'fs99', 303)" onmouseover="showTip(event, 'fs99', 303)" class="i">s</span> <span class="o">+</span> <span onmouseout="hideTip(event, 'fs101', 304)" onmouseover="showTip(event, 'fs101', 304)" class="i">l</span> <span class="o">+</span> <span onmouseout="hideTip(event, 'fs103', 305)" onmouseover="showTip(event, 'fs103', 305)" class="i">v</span>)
+    <span onmouseout="hideTip(event, 'fs98', 306)" onmouseover="showTip(event, 'fs98', 306)" class="i">sd</span>, (<span onmouseout="hideTip(event, 'fs70', 307)" onmouseover="showTip(event, 'fs70', 307)" class="f">float</span> <span onmouseout="hideTip(event, 'fs99', 308)" onmouseover="showTip(event, 'fs99', 308)" class="i">s</span> <span class="o">/</span> <span onmouseout="hideTip(event, 'fs105', 309)" onmouseover="showTip(event, 'fs105', 309)" class="i">tot</span>, <span onmouseout="hideTip(event, 'fs70', 310)" onmouseover="showTip(event, 'fs70', 310)" class="f">float</span> <span onmouseout="hideTip(event, 'fs101', 311)" onmouseover="showTip(event, 'fs101', 311)" class="i">l</span> <span class="o">/</span> <span onmouseout="hideTip(event, 'fs105', 312)" onmouseover="showTip(event, 'fs105', 312)" class="i">tot</span>, <span onmouseout="hideTip(event, 'fs70', 313)" onmouseover="showTip(event, 'fs70', 313)" class="f">float</span> <span onmouseout="hideTip(event, 'fs103', 314)" onmouseover="showTip(event, 'fs103', 314)" class="i">v</span> <span class="o">/</span> <span onmouseout="hideTip(event, 'fs105', 315)" onmouseover="showTip(event, 'fs105', 315)" class="i">tot</span>) )
+
+[ <span onmouseout="hideTip(event, 'fs95', 316)" onmouseover="showTip(event, 'fs95', 316)" class="i">ratios</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 317)" onmouseover="showTip(event, 'fs43', 317)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs97', 318)" onmouseover="showTip(event, 'fs97', 318)" class="f">map</span> (<span class="k">fun</span> (<span onmouseout="hideTip(event, 'fs106', 319)" onmouseover="showTip(event, 'fs106', 319)" class="i">k</span>, (<span onmouseout="hideTip(event, 'fs107', 320)" onmouseover="showTip(event, 'fs107', 320)" class="i">s</span>, <span onmouseout="hideTip(event, 'fs108', 321)" onmouseover="showTip(event, 'fs108', 321)" class="i">l</span>, <span onmouseout="hideTip(event, 'fs109', 322)" onmouseover="showTip(event, 'fs109', 322)" class="i">v</span>)) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs106', 323)" onmouseover="showTip(event, 'fs106', 323)" class="i">k</span>, <span onmouseout="hideTip(event, 'fs107', 324)" onmouseover="showTip(event, 'fs107', 324)" class="i">s</span>)
+  <span onmouseout="hideTip(event, 'fs95', 325)" onmouseover="showTip(event, 'fs95', 325)" class="i">ratios</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 326)" onmouseover="showTip(event, 'fs43', 326)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs97', 327)" onmouseover="showTip(event, 'fs97', 327)" class="f">map</span> (<span class="k">fun</span> (<span onmouseout="hideTip(event, 'fs106', 328)" onmouseover="showTip(event, 'fs106', 328)" class="i">k</span>, (<span onmouseout="hideTip(event, 'fs107', 329)" onmouseover="showTip(event, 'fs107', 329)" class="i">s</span>, <span onmouseout="hideTip(event, 'fs108', 330)" onmouseover="showTip(event, 'fs108', 330)" class="i">l</span>, <span onmouseout="hideTip(event, 'fs109', 331)" onmouseover="showTip(event, 'fs109', 331)" class="i">v</span>)) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs106', 332)" onmouseover="showTip(event, 'fs106', 332)" class="i">k</span>, <span onmouseout="hideTip(event, 'fs108', 333)" onmouseover="showTip(event, 'fs108', 333)" class="i">l</span>)
+  <span onmouseout="hideTip(event, 'fs95', 334)" onmouseover="showTip(event, 'fs95', 334)" class="i">ratios</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 335)" onmouseover="showTip(event, 'fs43', 335)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs97', 336)" onmouseover="showTip(event, 'fs97', 336)" class="f">map</span> (<span class="k">fun</span> (<span onmouseout="hideTip(event, 'fs106', 337)" onmouseover="showTip(event, 'fs106', 337)" class="i">k</span>, (<span onmouseout="hideTip(event, 'fs107', 338)" onmouseover="showTip(event, 'fs107', 338)" class="i">s</span>, <span onmouseout="hideTip(event, 'fs108', 339)" onmouseover="showTip(event, 'fs108', 339)" class="i">l</span>, <span onmouseout="hideTip(event, 'fs109', 340)" onmouseover="showTip(event, 'fs109', 340)" class="i">v</span>)) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs106', 341)" onmouseover="showTip(event, 'fs106', 341)" class="i">k</span>, <span onmouseout="hideTip(event, 'fs109', 342)" onmouseover="showTip(event, 'fs109', 342)" class="i">v</span>) ]
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 343)" onmouseover="showTip(event, 'fs62', 343)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 344)" onmouseover="showTip(event, 'fs63', 344)" class="i">Column</span>
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 345)" onmouseover="showTip(event, 'fs62', 345)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs91', 346)" onmouseover="showTip(event, 'fs91', 346)" class="f">WithOptions</span>(<span onmouseout="hideTip(event, 'fs92', 347)" onmouseover="showTip(event, 'fs92', 347)" class="t">Options</span>(<span class="i">isStacked</span><span class="o">=</span><span class="k">true</span>)) 
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 348)" onmouseover="showTip(event, 'fs62', 348)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs93', 349)" onmouseover="showTip(event, 'fs93', 349)" class="f">WithLabels</span> [<span class="s">&quot;0-4 weeks&quot;</span>; <span class="s">&quot;4-8 weeks&quot;</span>; <span class="s">&quot;&gt;8 weeks&quot;</span>]
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><script type="text/javascript">
+    google.charts.setOnLoadCallback(drawChart);
+            function drawChart() {
+                if ("")
+                    google.visualization.mapsApiKey = ""
+
+                var data = new google.visualization.DataTable({"cols": [{"type": "datetime" ,"id": "Column 1" ,"label": "Column 1" }, {"type": "number" ,"id": "0-4 weeks" ,"label": "0-4 weeks" }, {"type": "number" ,"id": "4-8 weeks" ,"label": "4-8 weeks" }, {"type": "number" ,"id": ">8 weeks" ,"label": ">8 weeks" }], "rows" : [{"c" : [{"v": "Date(2020, 4, 10, 0, 0, 0)"}, {"v": 0.424581005586592}, {"v": 0.134078212290503}, {"v": 0.441340782122905}]}, {"c" : [{"v": "Date(2020, 4, 17, 0, 0, 0)"}, {"v": 0.353846153846154}, {"v": 0.1}, {"v": 0.546153846153846}]}, {"c" : [{"v": "Date(2020, 4, 24, 0, 0, 0)"}, {"v": 0.217948717948718}, {"v": 0.217948717948718}, {"v": 0.564102564102564}]}, {"c" : [{"v": "Date(2020, 4, 31, 0, 0, 0)"}, {"v": 0.32}, {"v": 0.0933333333333333}, {"v": 0.586666666666667}]}, {"c" : [{"v": "Date(2020, 5, 7, 0, 0, 0)"}, {"v": 0.333333333333333}, {"v": 0.146666666666667}, {"v": 0.52}]}, {"c" : [{"v": "Date(2020, 5, 14, 0, 0, 0)"}, {"v": 0.606060606060606}, {"v": 0.0505050505050505}, {"v": 0.343434343434343}]}, {"c" : [{"v": "Date(2020, 5, 21, 0, 0, 0)"}, {"v": 0.353846153846154}, {"v": 0.153846153846154}, {"v": 0.492307692307692}]}]});
+
+                
+
+                var options = {"backgroundColor":{"fill":"transparent"},"chartArea":{"backgroundColor":{"fill":"#f4f4f4"}},"colors":["#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5"],"hAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"isStacked":true,"legend":{"position":"right","textStyle":{"color":"#000000"}},"titleTextStyle":{"color":"#000000"},"vAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"datalessRegionColor":"#fdfdfd"} 
+
+                var chart = new google.visualization.ColumnChart(document.getElementById('ca597f1d-594f-47a4-b324-3837669c3dc9'));
+                chart.draw(data, options);
+            }
+</script>
+<div id="ca597f1d-594f-47a4-b324-3837669c3dc9" style="width: 800px; height: 450px;"></div></div>
+<p>Let's now calculate the mean of ratios, together with variance and standard deviation
+We're going to assume that this variance is not too unreasonable (but that may be a
+strong assumption).</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs110', 350)" onmouseover="showTip(event, 'fs110', 350)" class="i">ratiosFrame</span> <span class="o">=</span> 
+  <span onmouseout="hideTip(event, 'fs95', 351)" onmouseover="showTip(event, 'fs95', 351)" class="i">ratios</span> 
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs41', 352)" onmouseover="showTip(event, 'fs41', 352)" class="t">Frame</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs111', 353)" onmouseover="showTip(event, 'fs111', 353)" class="f">ofRecords</span>
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs41', 354)" onmouseover="showTip(event, 'fs41', 354)" class="t">Frame</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs112', 355)" onmouseover="showTip(event, 'fs112', 355)" class="f">expandCols</span> [<span class="s">&quot;Item2&quot;</span>]
+  <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs41', 356)" onmouseover="showTip(event, 'fs41', 356)" class="t">Frame</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs113', 357)" onmouseover="showTip(event, 'fs113', 357)" class="f">indexColsWith</span> [<span class="s">&quot;Week&quot;</span>; <span class="s">&quot;Short&quot;</span>; <span class="s">&quot;Normal&quot;</span>; <span class="s">&quot;Long&quot;</span>]
+
+<span onmouseout="hideTip(event, 'fs114', 358)" onmouseover="showTip(event, 'fs114', 358)" class="f">frame</span> [
+  <span class="s">&quot;Mean&quot;</span> <span class="o">=&gt;</span> (<span onmouseout="hideTip(event, 'fs110', 359)" onmouseover="showTip(event, 'fs110', 359)" class="i">ratiosFrame</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs115', 360)" onmouseover="showTip(event, 'fs115', 360)" class="i">Stats</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs116', 361)" onmouseover="showTip(event, 'fs116', 361)" class="i">mean</span>)
+  <span class="s">&quot;Variance&quot;</span> <span class="o">=&gt;</span> (<span onmouseout="hideTip(event, 'fs110', 362)" onmouseover="showTip(event, 'fs110', 362)" class="i">ratiosFrame</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs115', 363)" onmouseover="showTip(event, 'fs115', 363)" class="i">Stats</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs117', 364)" onmouseover="showTip(event, 'fs117', 364)" class="i">stdDev</span>)
+  <span class="s">&quot;Sdv&quot;</span> <span class="o">=&gt;</span> (<span onmouseout="hideTip(event, 'fs110', 365)" onmouseover="showTip(event, 'fs110', 365)" class="i">ratiosFrame</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs115', 366)" onmouseover="showTip(event, 'fs115', 366)" class="i">Stats</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs117', 367)" onmouseover="showTip(event, 'fs117', 367)" class="i">stdDev</span>) ]
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><div class="grid" id="fslab-grid-1028-1"><table><thead><tr class="head"><th>#</th><th>Mean</th><th>Variance</th><th>Sdv</th></tr></thead><tbody><tr><th>Week</th><td>N/A</td><td>N/A</td><td>N/A</td></tr><tr><th>Short</th><td>0.37</td><td>0.12</td><td>0.12</td></tr><tr><th>Normal</th><td>0.13</td><td>0.05</td><td>0.05</td></tr><tr><th>Long</th><td>0.50</td><td>0.08</td><td>0.08</td></tr></tbody></table></div></div>
+<h2>Estimating fundraisers before March</h2>
+<p>Finally, we're going to calculate the average ratios and estimate the number of fundraisers.
+For this, we need some more helper functions. We can now reasonably give the number of
+fundraisers from 8 weeks before our first scrape until 8 weeks before our last scrape
+(we could add undetermined fundraisers at the end, but I'm too lazy to do that...).</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs118', 368)" onmouseover="showTip(event, 'fs118', 368)" class="i">srat</span>, <span onmouseout="hideTip(event, 'fs119', 369)" onmouseover="showTip(event, 'fs119', 369)" class="i">nrat</span>, <span onmouseout="hideTip(event, 'fs120', 370)" onmouseover="showTip(event, 'fs120', 370)" class="i">lrat</span> <span class="o">=</span> 
+  <span class="k">let</span> <span onmouseout="hideTip(event, 'fs121', 371)" onmouseover="showTip(event, 'fs121', 371)" class="i">m</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs115', 372)" onmouseover="showTip(event, 'fs115', 372)" class="t">Stats</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs116', 373)" onmouseover="showTip(event, 'fs116', 373)" class="f">mean</span> <span onmouseout="hideTip(event, 'fs110', 374)" onmouseover="showTip(event, 'fs110', 374)" class="i">ratiosFrame</span>
+  <span onmouseout="hideTip(event, 'fs121', 375)" onmouseover="showTip(event, 'fs121', 375)" class="i">m</span><span class="o">?</span><span class="i">Short</span>, <span onmouseout="hideTip(event, 'fs121', 376)" onmouseover="showTip(event, 'fs121', 376)" class="i">m</span><span class="o">?</span><span class="i">Normal</span>, <span onmouseout="hideTip(event, 'fs121', 377)" onmouseover="showTip(event, 'fs121', 377)" class="i">m</span><span class="o">?</span><span class="i">Long</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs122', 378)" onmouseover="showTip(event, 'fs122', 378)" class="f">estimated</span> <span onmouseout="hideTip(event, 'fs123', 379)" onmouseover="showTip(event, 'fs123', 379)" class="i">ratio</span> <span onmouseout="hideTip(event, 'fs75', 380)" onmouseover="showTip(event, 'fs75', 380)" class="i">data</span> <span class="o">=</span>
+  [ <span class="k">for</span> <span class="i">k</span>, <span class="i">v</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs89', 381)" onmouseover="showTip(event, 'fs89', 381)" class="f">countsByAge</span> <span class="n">57</span> <span onmouseout="hideTip(event, 'fs48', 382)" onmouseover="showTip(event, 'fs48', 382)" class="p">None</span> <span onmouseout="hideTip(event, 'fs75', 383)" onmouseover="showTip(event, 'fs75', 383)" class="i">data</span> <span class="k">-&gt;</span>
+      <span class="i">k</span>, <span onmouseout="hideTip(event, 'fs19', 384)" onmouseover="showTip(event, 'fs19', 384)" class="i">int</span> (<span onmouseout="hideTip(event, 'fs70', 385)" onmouseover="showTip(event, 'fs70', 385)" class="i">float</span> <span class="i">v</span> <span class="o">/</span> <span onmouseout="hideTip(event, 'fs120', 386)" onmouseover="showTip(event, 'fs120', 386)" class="i">lrat</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs123', 387)" onmouseover="showTip(event, 'fs123', 387)" class="i">ratio</span>) ]
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs124', 388)" onmouseover="showTip(event, 'fs124', 388)" class="i">estimatable</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 389)" onmouseover="showTip(event, 'fs40', 389)" class="i">merged</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 390)" onmouseover="showTip(event, 'fs29', 390)" class="t">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 391)" onmouseover="showTip(event, 'fs57', 391)" class="f">filter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs58', 392)" onmouseover="showTip(event, 'fs58', 392)" class="i">d</span> <span class="k">-&gt;</span> 
+  <span onmouseout="hideTip(event, 'fs58', 393)" onmouseover="showTip(event, 'fs58', 393)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 394)" onmouseover="showTip(event, 'fs13', 394)" class="i">Created</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 395)" onmouseover="showTip(event, 'fs64', 395)" class="i">firstScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs66', 396)" onmouseover="showTip(event, 'fs66', 396)" class="f">weeks</span> <span class="n">8</span> <span class="o">&amp;&amp;</span> 
+  <span onmouseout="hideTip(event, 'fs58', 397)" onmouseover="showTip(event, 'fs58', 397)" class="i">d</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs13', 398)" onmouseover="showTip(event, 'fs13', 398)" class="i">Created</span> <span class="o">&lt;</span> <span onmouseout="hideTip(event, 'fs65', 399)" onmouseover="showTip(event, 'fs65', 399)" class="i">lastScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs66', 400)" onmouseover="showTip(event, 'fs66', 400)" class="f">weeks</span> <span class="n">8</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs71', 401)" onmouseover="showTip(event, 'fs71', 401)" class="f">day</span> <span class="n">1</span> )
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs125', 402)" onmouseover="showTip(event, 'fs125', 402)" class="f">zeroBefore</span> <span onmouseout="hideTip(event, 'fs126', 403)" onmouseover="showTip(event, 'fs126', 403)" class="i">dt</span> <span onmouseout="hideTip(event, 'fs127', 404)" onmouseover="showTip(event, 'fs127', 404)" class="i">data</span> <span class="o">=</span> 
+  [ <span class="k">for</span> <span onmouseout="hideTip(event, 'fs128', 405)" onmouseover="showTip(event, 'fs128', 405)" class="i">d</span>, <span onmouseout="hideTip(event, 'fs103', 406)" onmouseover="showTip(event, 'fs103', 406)" class="i">v</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs127', 407)" onmouseover="showTip(event, 'fs127', 407)" class="i">data</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs128', 408)" onmouseover="showTip(event, 'fs128', 408)" class="i">d</span>, <span class="k">if</span> <span onmouseout="hideTip(event, 'fs128', 409)" onmouseover="showTip(event, 'fs128', 409)" class="i">d</span> <span class="o">&lt;</span> <span onmouseout="hideTip(event, 'fs126', 410)" onmouseover="showTip(event, 'fs126', 410)" class="i">dt</span> <span class="k">then</span> <span class="n">0</span> <span class="k">else</span> <span onmouseout="hideTip(event, 'fs103', 411)" onmouseover="showTip(event, 'fs103', 411)" class="i">v</span> ]
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs129', 412)" onmouseover="showTip(event, 'fs129', 412)" class="f">zeroAfter</span> <span onmouseout="hideTip(event, 'fs126', 413)" onmouseover="showTip(event, 'fs126', 413)" class="i">dt</span> <span onmouseout="hideTip(event, 'fs127', 414)" onmouseover="showTip(event, 'fs127', 414)" class="i">data</span> <span class="o">=</span> 
+  [ <span class="k">for</span> <span onmouseout="hideTip(event, 'fs128', 415)" onmouseover="showTip(event, 'fs128', 415)" class="i">d</span>, <span onmouseout="hideTip(event, 'fs103', 416)" onmouseover="showTip(event, 'fs103', 416)" class="i">v</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs127', 417)" onmouseover="showTip(event, 'fs127', 417)" class="i">data</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs128', 418)" onmouseover="showTip(event, 'fs128', 418)" class="i">d</span>, <span class="k">if</span> <span onmouseout="hideTip(event, 'fs128', 419)" onmouseover="showTip(event, 'fs128', 419)" class="i">d</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 420)" onmouseover="showTip(event, 'fs126', 420)" class="i">dt</span> <span class="k">then</span> <span class="n">0</span> <span class="k">else</span> <span onmouseout="hideTip(event, 'fs103', 421)" onmouseover="showTip(event, 'fs103', 421)" class="i">v</span> ]
+</code></pre></td>
+</tr>
+</table>
+<p>The following is the final chart! It shows the total number of fundraisers per week
+(starting on Sunday) for all dates for which we know or can reasonably estimate. It shows
+actual data from our first parse for all fundraisers. For regular fundraisers, we estimate
+numbers from 8-4 weeks before our first scrape. For short fundraisers, we estimate numbers
+from 8-0 weeks before our first scrape.</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs130', 422)" onmouseover="showTip(event, 'fs130', 422)" class="i">lines</span> <span class="o">=</span> 
+  [ <span onmouseout="hideTip(event, 'fs89', 423)" onmouseover="showTip(event, 'fs89', 423)" class="f">countsByAge</span> <span class="n">0</span> (<span onmouseout="hideTip(event, 'fs55', 424)" onmouseover="showTip(event, 'fs55', 424)" class="p">Some</span> <span class="n">28</span>) <span onmouseout="hideTip(event, 'fs124', 425)" onmouseover="showTip(event, 'fs124', 425)" class="i">estimatable</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs125', 426)" onmouseover="showTip(event, 'fs125', 426)" class="f">zeroBefore</span> <span onmouseout="hideTip(event, 'fs64', 427)" onmouseover="showTip(event, 'fs64', 427)" class="i">firstScrape</span>
+    <span onmouseout="hideTip(event, 'fs122', 428)" onmouseover="showTip(event, 'fs122', 428)" class="f">estimated</span> <span onmouseout="hideTip(event, 'fs118', 429)" onmouseover="showTip(event, 'fs118', 429)" class="i">srat</span> <span onmouseout="hideTip(event, 'fs124', 430)" onmouseover="showTip(event, 'fs124', 430)" class="i">estimatable</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs129', 431)" onmouseover="showTip(event, 'fs129', 431)" class="f">zeroAfter</span> <span onmouseout="hideTip(event, 'fs64', 432)" onmouseover="showTip(event, 'fs64', 432)" class="i">firstScrape</span>
+    <span onmouseout="hideTip(event, 'fs89', 433)" onmouseover="showTip(event, 'fs89', 433)" class="f">countsByAge</span> <span class="n">29</span> (<span onmouseout="hideTip(event, 'fs55', 434)" onmouseover="showTip(event, 'fs55', 434)" class="p">Some</span> <span class="n">56</span>) <span onmouseout="hideTip(event, 'fs124', 435)" onmouseover="showTip(event, 'fs124', 435)" class="i">estimatable</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs125', 436)" onmouseover="showTip(event, 'fs125', 436)" class="f">zeroBefore</span> (<span onmouseout="hideTip(event, 'fs64', 437)" onmouseover="showTip(event, 'fs64', 437)" class="i">firstScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs66', 438)" onmouseover="showTip(event, 'fs66', 438)" class="i">weeks</span> <span class="n">4</span>)
+    <span onmouseout="hideTip(event, 'fs122', 439)" onmouseover="showTip(event, 'fs122', 439)" class="f">estimated</span> <span onmouseout="hideTip(event, 'fs119', 440)" onmouseover="showTip(event, 'fs119', 440)" class="i">nrat</span> <span onmouseout="hideTip(event, 'fs124', 441)" onmouseover="showTip(event, 'fs124', 441)" class="i">estimatable</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs129', 442)" onmouseover="showTip(event, 'fs129', 442)" class="f">zeroAfter</span> (<span onmouseout="hideTip(event, 'fs64', 443)" onmouseover="showTip(event, 'fs64', 443)" class="i">firstScrape</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs66', 444)" onmouseover="showTip(event, 'fs66', 444)" class="i">weeks</span> <span class="n">4</span>)
+    <span onmouseout="hideTip(event, 'fs89', 445)" onmouseover="showTip(event, 'fs89', 445)" class="f">countsByAge</span> <span class="n">57</span> <span onmouseout="hideTip(event, 'fs48', 446)" onmouseover="showTip(event, 'fs48', 446)" class="p">None</span> <span onmouseout="hideTip(event, 'fs124', 447)" onmouseover="showTip(event, 'fs124', 447)" class="i">estimatable</span> ]
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs131', 448)" onmouseover="showTip(event, 'fs131', 448)" class="i">labels</span> <span class="o">=</span> 
+  [<span class="s">&quot;0-4 weeks&quot;</span>; <span class="s">&quot;0-4 (pred)&quot;</span>; <span class="s">&quot;4-8 weeks&quot;</span>; <span class="s">&quot;4-8 (pred)&quot;</span>; <span class="s">&quot;&gt;8 weeks&quot;</span>]
+
+<span onmouseout="hideTip(event, 'fs130', 449)" onmouseover="showTip(event, 'fs130', 449)" class="i">lines</span>
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 450)" onmouseover="showTip(event, 'fs62', 450)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 451)" onmouseover="showTip(event, 'fs63', 451)" class="i">Column</span>
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 452)" onmouseover="showTip(event, 'fs62', 452)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs91', 453)" onmouseover="showTip(event, 'fs91', 453)" class="f">WithOptions</span>(<span onmouseout="hideTip(event, 'fs92', 454)" onmouseover="showTip(event, 'fs92', 454)" class="t">Options</span>(<span class="i">isStacked</span><span class="o">=</span><span class="k">true</span>)) 
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 455)" onmouseover="showTip(event, 'fs62', 455)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs93', 456)" onmouseover="showTip(event, 'fs93', 456)" class="f">WithLabels</span> <span onmouseout="hideTip(event, 'fs131', 457)" onmouseover="showTip(event, 'fs131', 457)" class="i">labels</span>
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><script type="text/javascript">
+    google.charts.setOnLoadCallback(drawChart);
+            function drawChart() {
+                if ("")
+                    google.visualization.mapsApiKey = ""
+
+                var data = new google.visualization.DataTable({"cols": [{"type": "datetime" ,"id": "Column 1" ,"label": "Column 1" }, {"type": "number" ,"id": "0-4 weeks" ,"label": "0-4 weeks" }, {"type": "number" ,"id": "0-4 (pred)" ,"label": "0-4 (pred)" }, {"type": "number" ,"id": "4-8 weeks" ,"label": "4-8 weeks" }, {"type": "number" ,"id": "4-8 (pred)" ,"label": "4-8 (pred)" }, {"type": "number" ,"id": ">8 weeks" ,"label": ">8 weeks" }], "rows" : [{"c" : [{"v": "Date(2020, 2, 22, 0, 0, 0)"}, {"v": 0}, {"v": 83}, {"v": 0}, {"v": 28}, {"v": 112}]}, {"c" : [{"v": "Date(2020, 2, 29, 0, 0, 0)"}, {"v": 0}, {"v": 100}, {"v": 0}, {"v": 34}, {"v": 135}]}, {"c" : [{"v": "Date(2020, 3, 5, 0, 0, 0)"}, {"v": 0}, {"v": 69}, {"v": 0}, {"v": 23}, {"v": 93}]}, {"c" : [{"v": "Date(2020, 3, 12, 0, 0, 0)"}, {"v": 0}, {"v": 104}, {"v": 0}, {"v": 35}, {"v": 140}]}, {"c" : [{"v": "Date(2020, 3, 19, 0, 0, 0)"}, {"v": 0}, {"v": 113}, {"v": 14}, {"v": 0}, {"v": 152}]}, {"c" : [{"v": "Date(2020, 3, 26, 0, 0, 0)"}, {"v": 0}, {"v": 129}, {"v": 60}, {"v": 0}, {"v": 173}]}, {"c" : [{"v": "Date(2020, 4, 3, 0, 0, 0)"}, {"v": 0}, {"v": 77}, {"v": 15}, {"v": 0}, {"v": 104}]}, {"c" : [{"v": "Date(2020, 4, 10, 0, 0, 0)"}, {"v": 0}, {"v": 59}, {"v": 24}, {"v": 0}, {"v": 79}]}, {"c" : [{"v": "Date(2020, 4, 17, 0, 0, 0)"}, {"v": 46}, {"v": 0}, {"v": 13}, {"v": 0}, {"v": 71}]}, {"c" : [{"v": "Date(2020, 4, 24, 0, 0, 0)"}, {"v": 17}, {"v": 0}, {"v": 17}, {"v": 0}, {"v": 44}]}, {"c" : [{"v": "Date(2020, 4, 31, 0, 0, 0)"}, {"v": 24}, {"v": 0}, {"v": 7}, {"v": 0}, {"v": 44}]}, {"c" : [{"v": "Date(2020, 5, 7, 0, 0, 0)"}, {"v": 25}, {"v": 0}, {"v": 11}, {"v": 0}, {"v": 39}]}, {"c" : [{"v": "Date(2020, 5, 14, 0, 0, 0)"}, {"v": 60}, {"v": 0}, {"v": 5}, {"v": 0}, {"v": 34}]}, {"c" : [{"v": "Date(2020, 5, 21, 0, 0, 0)"}, {"v": 23}, {"v": 0}, {"v": 10}, {"v": 0}, {"v": 32}]}]});
+
+                
+
+                var options = {"backgroundColor":{"fill":"transparent"},"chartArea":{"backgroundColor":{"fill":"#f4f4f4"}},"colors":["#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5"],"hAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"isStacked":true,"legend":{"position":"right","textStyle":{"color":"#000000"}},"titleTextStyle":{"color":"#000000"},"vAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"datalessRegionColor":"#fdfdfd"} 
+
+                var chart = new google.visualization.ColumnChart(document.getElementById('0fd20f47-1c9e-4fd2-b18a-df4fd3b736ed'));
+                chart.draw(data, options);
+            }
+</script>
+<div id="0fd20f47-1c9e-4fd2-b18a-df4fd3b736ed" style="width: 800px; height: 450px;"></div></div>
+<p>We can add all the data together and show this as a line chart, showing the total number
+of fundraisers started:</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span onmouseout="hideTip(event, 'fs130', 458)" onmouseover="showTip(event, 'fs130', 458)" class="i">lines</span>
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs43', 459)" onmouseover="showTip(event, 'fs43', 459)" class="t">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs132', 460)" onmouseover="showTip(event, 'fs132', 460)" class="f">reduce</span> (<span onmouseout="hideTip(event, 'fs133', 461)" onmouseover="showTip(event, 'fs133', 461)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs134', 462)" onmouseover="showTip(event, 'fs134', 462)" class="i">map2</span> (<span class="k">fun</span> (<span class="i">d</span>, <span class="i">a</span>) (_, <span class="i">b</span>) <span class="k">-&gt;</span> <span class="i">d</span>, <span class="i">a</span> <span class="o">+</span> <span class="i">b</span>))
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 463)" onmouseover="showTip(event, 'fs62', 463)" class="t">Chart</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs135', 464)" onmouseover="showTip(event, 'fs135', 464)" class="f">Area</span>
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><script type="text/javascript">
+    google.charts.setOnLoadCallback(drawChart);
+            function drawChart() {
+                if ("")
+                    google.visualization.mapsApiKey = ""
+
+                var data = new google.visualization.DataTable({"cols": [{"type": "datetime" ,"id": "Column 1" ,"label": "Column 1" }, {"type": "number" ,"id": "Column 2" ,"label": "Column 2" }], "rows" : [{"c" : [{"v": "Date(2020, 2, 22, 0, 0, 0)"}, {"v": 223}]}, {"c" : [{"v": "Date(2020, 2, 29, 0, 0, 0)"}, {"v": 269}]}, {"c" : [{"v": "Date(2020, 3, 5, 0, 0, 0)"}, {"v": 185}]}, {"c" : [{"v": "Date(2020, 3, 12, 0, 0, 0)"}, {"v": 279}]}, {"c" : [{"v": "Date(2020, 3, 19, 0, 0, 0)"}, {"v": 279}]}, {"c" : [{"v": "Date(2020, 3, 26, 0, 0, 0)"}, {"v": 362}]}, {"c" : [{"v": "Date(2020, 4, 3, 0, 0, 0)"}, {"v": 196}]}, {"c" : [{"v": "Date(2020, 4, 10, 0, 0, 0)"}, {"v": 162}]}, {"c" : [{"v": "Date(2020, 4, 17, 0, 0, 0)"}, {"v": 130}]}, {"c" : [{"v": "Date(2020, 4, 24, 0, 0, 0)"}, {"v": 78}]}, {"c" : [{"v": "Date(2020, 4, 31, 0, 0, 0)"}, {"v": 75}]}, {"c" : [{"v": "Date(2020, 5, 7, 0, 0, 0)"}, {"v": 75}]}, {"c" : [{"v": "Date(2020, 5, 14, 0, 0, 0)"}, {"v": 99}]}, {"c" : [{"v": "Date(2020, 5, 21, 0, 0, 0)"}, {"v": 65}]}]});
+
+                
+
+                var options = {"backgroundColor":{"fill":"transparent"},"chartArea":{"backgroundColor":{"fill":"#f4f4f4"}},"colors":["#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c","#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5","#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f","#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5"],"hAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"legend":{"position":"none","textStyle":{"color":"#000000"}},"titleTextStyle":{"color":"#000000"},"vAxis":{"baselineColor":"#fdfdfd","gridlines":{"color":"#fdfdfd"},"textStyle":{"color":"#000000"}},"datalessRegionColor":"#fdfdfd"} 
+
+                var chart = new google.visualization.AreaChart(document.getElementById('caff74b4-4edf-47b1-8948-975c3df905c3'));
+                chart.draw(data, options);
+            }
+</script>
+<div id="caff74b4-4edf-47b1-8948-975c3df905c3" style="width: 800px; height: 450px;"></div></div>
+<p>The full data for each week in a convenient data table that is easy to copy and analyse further:</p>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+</pre></td>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span onmouseout="hideTip(event, 'fs114', 465)" onmouseover="showTip(event, 'fs114', 465)" class="f">frame</span>
+  [ <span class="k">for</span> <span class="i">lb</span>, <span class="i">l</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs43', 466)" onmouseover="showTip(event, 'fs43', 466)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs136', 467)" onmouseover="showTip(event, 'fs136', 467)" class="i">zip</span> <span onmouseout="hideTip(event, 'fs131', 468)" onmouseover="showTip(event, 'fs131', 468)" class="i">labels</span> <span onmouseout="hideTip(event, 'fs130', 469)" onmouseover="showTip(event, 'fs130', 469)" class="i">lines</span> <span class="k">do</span>
+      <span class="k">yield</span> <span class="i">lb</span> <span class="o">=&gt;</span> <span onmouseout="hideTip(event, 'fs137', 470)" onmouseover="showTip(event, 'fs137', 470)" class="i">series</span> <span class="i">l</span> 
+    <span class="k">yield</span> <span class="s">&quot;Total&quot;</span> <span class="o">=&gt;</span> <span onmouseout="hideTip(event, 'fs137', 471)" onmouseover="showTip(event, 'fs137', 471)" class="i">series</span> (<span onmouseout="hideTip(event, 'fs43', 472)" onmouseover="showTip(event, 'fs43', 472)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs132', 473)" onmouseover="showTip(event, 'fs132', 473)" class="i">reduce</span> (<span onmouseout="hideTip(event, 'fs133', 474)" onmouseover="showTip(event, 'fs133', 474)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs134', 475)" onmouseover="showTip(event, 'fs134', 475)" class="i">map2</span> (<span class="k">fun</span> (<span class="i">d</span>, <span class="i">a</span>) (_, <span class="i">b</span>) <span class="k">-&gt;</span> <span class="i">d</span>, <span class="i">a</span> <span class="o">+</span> <span class="i">b</span>)) <span onmouseout="hideTip(event, 'fs130', 476)" onmouseover="showTip(event, 'fs130', 476)" class="i">lines</span>) ]
+<span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs41', 477)" onmouseover="showTip(event, 'fs41', 477)" class="t">Frame</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs138', 478)" onmouseover="showTip(event, 'fs138', 478)" class="f">mapRowKeys</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs139', 479)" onmouseover="showTip(event, 'fs139', 479)" class="i">rk</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs139', 480)" onmouseover="showTip(event, 'fs139', 480)" class="i">rk</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs140', 481)" onmouseover="showTip(event, 'fs140', 481)" class="f">ToString</span>(<span class="s">&quot;yyyy-MM-dd&quot;</span>))
+</code></pre></td>
+</tr>
+</table>
+<div class="fslab-html-output"><div class="grid" id="fslab-grid-1028-2"><table><thead><tr class="head"><th>#</th><th>0-4 weeks</th><th>0-4 (pred)</th><th>4-8 weeks</th><th>4-8 (pred)</th><th>>8 weeks</th><th>Total</th></tr></thead><tbody><tr><th>2020-03-22</th><td>0</td><td>83</td><td>0</td><td>28</td><td>112</td><td>223</td></tr><tr><th>2020-03-29</th><td>0</td><td>100</td><td>0</td><td>34</td><td>135</td><td>269</td></tr><tr><th>2020-04-05</th><td>0</td><td>69</td><td>0</td><td>23</td><td>93</td><td>185</td></tr><tr><th>2020-04-12</th><td>0</td><td>104</td><td>0</td><td>35</td><td>140</td><td>279</td></tr><tr><th>2020-04-19</th><td>0</td><td>113</td><td>14</td><td>0</td><td>152</td><td>279</td></tr><tr><th>2020-04-26</th><td>0</td><td>129</td><td>60</td><td>0</td><td>173</td><td>362</td></tr><tr><th>2020-05-03</th><td>0</td><td>77</td><td>15</td><td>0</td><td>104</td><td>196</td></tr><tr><th>2020-05-10</th><td>0</td><td>59</td><td>24</td><td>0</td><td>79</td><td>162</td></tr><tr><th>2020-05-17</th><td>46</td><td>0</td><td>13</td><td>0</td><td>71</td><td>130</td></tr><tr><th>2020-05-24</th><td>17</td><td>0</td><td>17</td><td>0</td><td>44</td><td>78</td></tr><tr><th>2020-05-31</th><td>24</td><td>0</td><td>7</td><td>0</td><td>44</td><td>75</td></tr><tr><th>2020-06-07</th><td>25</td><td>0</td><td>11</td><td>0</td><td>39</td><td>75</td></tr><tr><th>2020-06-14</th><td>60</td><td>0</td><td>5</td><td>0</td><td>34</td><td>99</td></tr><tr><th>2020-06-21</th><td>23</td><td>0</td><td>10</td><td>0</td><td>32</td><td>65</td></tr></tbody></table></div></div>
+<div class="tip" id="fs1">namespace System</div>
+<div class="tip" id="fs2">namespace System.Collections</div>
+<div class="tip" id="fs3">namespace System.Collections.Generic</div>
+<div class="tip" id="fs4">namespace Deedle</div>
+<div class="tip" id="fs5">namespace XPlot</div>
+<div class="tip" id="fs6">namespace XPlot.GoogleCharts</div>
+<div class="tip" id="fs7">type Environment =<br />&#160;&#160;static member CommandLine : string<br />&#160;&#160;static member CurrentDirectory : string with get, set<br />&#160;&#160;static member Exit : exitCode:int -&gt; unit<br />&#160;&#160;static member ExitCode : int with get, set<br />&#160;&#160;static member ExpandEnvironmentVariables : name:string -&gt; string<br />&#160;&#160;static member FailFast : message:string -&gt; unit + 1 overload<br />&#160;&#160;static member GetCommandLineArgs : unit -&gt; string[]<br />&#160;&#160;static member GetEnvironmentVariable : variable:string -&gt; string + 1 overload<br />&#160;&#160;static member GetEnvironmentVariables : unit -&gt; IDictionary + 1 overload<br />&#160;&#160;static member GetFolderPath : folder:SpecialFolder -&gt; string + 1 overload<br />&#160;&#160;...<br />&#160;&#160;nested type SpecialFolder<br />&#160;&#160;nested type SpecialFolderOption<br /><br />Full name: System.Environment</div>
+<div class="tip" id="fs8">property Environment.CurrentDirectory: string</div>
+<div class="tip" id="fs9">type Fundraiser =<br />&#160;&#160;{Source: string;<br />&#160;&#160;&#160;Link: string;<br />&#160;&#160;&#160;Created: DateTime;<br />&#160;&#160;&#160;Week: DateTime;<br />&#160;&#160;&#160;MostRecentDonation: DateTime option;<br />&#160;&#160;&#160;Donations: (DateTime * int) [];<br />&#160;&#160;&#160;Raised: int;<br />&#160;&#160;&#160;Complete: bool;<br />&#160;&#160;&#160;Removed: DateTime option;}<br /><br />Full name: Fundraisers.Fundraiser</div>
+<div class="tip" id="fs10">Fundraiser.Source: string</div>
+<div class="tip" id="fs11">Multiple items<br />val string : value:&#39;T -&gt; string<br /><br />Full name: Microsoft.FSharp.Core.Operators.string<br /><br />--------------------<br />type string = String<br /><br />Full name: Microsoft.FSharp.Core.string</div>
+<div class="tip" id="fs12">Multiple items<br />Fundraiser.Link: string<br /><br />--------------------<br />type Link =<br />&#160;&#160;new : unit -&gt; Link<br />&#160;&#160;member ShouldSerializecolor : unit -&gt; bool<br />&#160;&#160;member color : Color<br />&#160;&#160;member color : Color with set<br /><br />Full name: XPlot.GoogleCharts.Configuration.Link<br /><br />--------------------<br />new : unit -&gt; Link</div>
+<div class="tip" id="fs13">Fundraiser.Created: DateTime</div>
+<div class="tip" id="fs14">Multiple items<br />type DateTime =<br />&#160;&#160;struct<br />&#160;&#160;&#160;&#160;new : ticks:int64 -&gt; DateTime + 10 overloads<br />&#160;&#160;&#160;&#160;member Add : value:TimeSpan -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddDays : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddHours : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMilliseconds : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMinutes : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMonths : months:int -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddSeconds : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddTicks : value:int64 -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddYears : value:int -&gt; DateTime<br />&#160;&#160;&#160;&#160;...<br />&#160;&#160;end<br /><br />Full name: System.DateTime<br /><br />--------------------<br />DateTime()<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(ticks: int64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(ticks: int64, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, calendar: Globalization.Calendar) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, calendar: Globalization.Calendar) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs15">Fundraiser.Week: DateTime</div>
+<div class="tip" id="fs16">Fundraiser.MostRecentDonation: DateTime option</div>
+<div class="tip" id="fs17">type &#39;T option = Option&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.option&lt;_&gt;</div>
+<div class="tip" id="fs18">Fundraiser.Donations: (DateTime * int) []</div>
+<div class="tip" id="fs19">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs20">Fundraiser.Raised: int</div>
+<div class="tip" id="fs21">Fundraiser.Complete: bool</div>
+<div class="tip" id="fs22">type bool = Boolean<br /><br />Full name: Microsoft.FSharp.Core.bool</div>
+<div class="tip" id="fs23">Fundraiser.Removed: DateTime option</div>
+<div class="tip" id="fs24">val parseDonations : s:string -&gt; (DateTime * int) []<br /><br />Full name: Fundraisers.parseDonations</div>
+<div class="tip" id="fs25">val s : string</div>
+<div class="tip" id="fs26">String.Split([&lt;ParamArray&gt;] separator: char []) : string []<br />String.Split(separator: string [], options: StringSplitOptions) : string []<br />String.Split(separator: char [], options: StringSplitOptions) : string []<br />String.Split(separator: char [], count: int) : string []<br />String.Split(separator: string [], count: int, options: StringSplitOptions) : string []<br />String.Split(separator: char [], count: int, options: StringSplitOptions) : string []</div>
+<div class="tip" id="fs27">type StringSplitOptions =<br />&#160;&#160;| None = 0<br />&#160;&#160;| RemoveEmptyEntries = 1<br /><br />Full name: System.StringSplitOptions</div>
+<div class="tip" id="fs28">field StringSplitOptions.RemoveEmptyEntries = 1</div>
+<div class="tip" id="fs29">type Array =<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CopyTo : array:Array * index:int -&gt; unit + 1 overload<br />&#160;&#160;member GetEnumerator : unit -&gt; IEnumerator<br />&#160;&#160;member GetLength : dimension:int -&gt; int<br />&#160;&#160;member GetLongLength : dimension:int -&gt; int64<br />&#160;&#160;member GetLowerBound : dimension:int -&gt; int<br />&#160;&#160;member GetUpperBound : dimension:int -&gt; int<br />&#160;&#160;member GetValue : [&lt;ParamArray&gt;] indices:int[] -&gt; obj + 7 overloads<br />&#160;&#160;member Initialize : unit -&gt; unit<br />&#160;&#160;member IsFixedSize : bool<br />&#160;&#160;...<br /><br />Full name: System.Array</div>
+<div class="tip" id="fs30">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; array:&#39;T [] -&gt; &#39;U []<br /><br />Full name: Microsoft.FSharp.Collections.Array.map</div>
+<div class="tip" id="fs31">val kv : string []</div>
+<div class="tip" id="fs32">DateTime.Parse(s: string) : DateTime<br />DateTime.Parse(s: string, provider: IFormatProvider) : DateTime<br />DateTime.Parse(s: string, provider: IFormatProvider, styles: Globalization.DateTimeStyles) : DateTime</div>
+<div class="tip" id="fs33">val previousSunday : d:DateTime -&gt; DateTime<br /><br />Full name: Fundraisers.previousSunday</div>
+<div class="tip" id="fs34">val d : DateTime</div>
+<div class="tip" id="fs35">val mutable d : DateTime</div>
+<div class="tip" id="fs36">property DateTime.DayOfWeek: DayOfWeek</div>
+<div class="tip" id="fs37">type DayOfWeek =<br />&#160;&#160;| Sunday = 0<br />&#160;&#160;| Monday = 1<br />&#160;&#160;| Tuesday = 2<br />&#160;&#160;| Wednesday = 3<br />&#160;&#160;| Thursday = 4<br />&#160;&#160;| Friday = 5<br />&#160;&#160;| Saturday = 6<br /><br />Full name: System.DayOfWeek</div>
+<div class="tip" id="fs38">field DayOfWeek.Sunday = 0</div>
+<div class="tip" id="fs39">DateTime.AddDays(value: float) : DateTime</div>
+<div class="tip" id="fs40">val merged : Fundraiser []<br /><br />Full name: Fundraisers.merged</div>
+<div class="tip" id="fs41">Multiple items<br />module Frame<br /><br />from Deedle<br /><br />--------------------<br />type Frame =<br />&#160;&#160;static member ReadReader : reader:IDataReader -&gt; Frame&lt;int,string&gt;<br />&#160;&#160;static member CustomExpanders : Dictionary&lt;Type,Func&lt;obj,seq&lt;string * Type * obj&gt;&gt;&gt;<br />&#160;&#160;static member NonExpandableInterfaces : List&lt;Type&gt;<br />&#160;&#160;static member NonExpandableTypes : HashSet&lt;Type&gt;<br /><br />Full name: Deedle.Frame<br /><br />--------------------<br />type Frame&lt;&#39;TRowKey,&#39;TColumnKey (requires equality and equality)&gt; =<br />&#160;&#160;interface IDynamicMetaObjectProvider<br />&#160;&#160;interface INotifyCollectionChanged<br />&#160;&#160;interface IFsiFormattable<br />&#160;&#160;interface IFrame<br />&#160;&#160;new : names:seq&lt;&#39;TColumnKey&gt; * columns:seq&lt;ISeries&lt;&#39;TRowKey&gt;&gt; -&gt; Frame&lt;&#39;TRowKey,&#39;TColumnKey&gt;<br />&#160;&#160;new : rowIndex:IIndex&lt;&#39;TRowKey&gt; * columnIndex:IIndex&lt;&#39;TColumnKey&gt; * data:IVector&lt;IVector&gt; * indexBuilder:IIndexBuilder * vectorBuilder:IVectorBuilder -&gt; Frame&lt;&#39;TRowKey,&#39;TColumnKey&gt;<br />&#160;&#160;member AddColumn : column:&#39;TColumnKey * series:ISeries&lt;&#39;TRowKey&gt; -&gt; unit<br />&#160;&#160;member AddColumn : column:&#39;TColumnKey * series:seq&lt;&#39;V&gt; -&gt; unit<br />&#160;&#160;member AddColumn : column:&#39;TColumnKey * series:ISeries&lt;&#39;TRowKey&gt; * lookup:Lookup -&gt; unit<br />&#160;&#160;member AddColumn : column:&#39;TColumnKey * series:seq&lt;&#39;V&gt; * lookup:Lookup -&gt; unit<br />&#160;&#160;...<br /><br />Full name: Deedle.Frame&lt;_,_&gt;<br /><br />--------------------<br />new : names:seq&lt;&#39;TColumnKey&gt; * columns:seq&lt;ISeries&lt;&#39;TRowKey&gt;&gt; -&gt; Frame&lt;&#39;TRowKey,&#39;TColumnKey&gt;<br />new : rowIndex:Indices.IIndex&lt;&#39;TRowKey&gt; * columnIndex:Indices.IIndex&lt;&#39;TColumnKey&gt; * data:IVector&lt;IVector&gt; * indexBuilder:Indices.IIndexBuilder * vectorBuilder:Vectors.IVectorBuilder -&gt; Frame&lt;&#39;TRowKey,&#39;TColumnKey&gt;</div>
+<div class="tip" id="fs42">static member Frame.ReadCsv : path:string * ?hasHeaders:bool * ?inferTypes:bool * ?inferRows:int * ?schema:string * ?separators:string * ?culture:string * ?maxRows:int * ?missingValues:string [] -&gt; Frame&lt;int,string&gt;<br />static member Frame.ReadCsv : stream:IO.Stream * ?hasHeaders:bool * ?inferTypes:bool * ?inferRows:int * ?schema:string * ?separators:string * ?culture:string * ?maxRows:int * ?missingValues:string [] -&gt; Frame&lt;int,string&gt;<br />static member Frame.ReadCsv : reader:IO.TextReader * ?hasHeaders:bool * ?inferTypes:bool * ?inferRows:int * ?schema:string * ?separators:string * ?culture:string * ?maxRows:int * ?missingValues:string [] -&gt; Frame&lt;int,string&gt;<br />static member Frame.ReadCsv : path:string * indexCol:string * ?hasHeaders:bool * ?inferTypes:bool * ?inferRows:int * ?schema:string * ?separators:string * ?culture:string * ?maxRows:int * ?missingValues:string [] -&gt; Frame&lt;&#39;R,string&gt; (requires equality)</div>
+<div class="tip" id="fs43">Multiple items<br />module Seq<br /><br />from YoLo<br /><br />--------------------<br />module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs44">val choose : chooser:(&#39;T -&gt; &#39;U option) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.choose</div>
+<div class="tip" id="fs45">val r : ObjectSeries&lt;string&gt;</div>
+<div class="tip" id="fs46">val not : value:bool -&gt; bool<br /><br />Full name: Microsoft.FSharp.Core.Operators.not</div>
+<div class="tip" id="fs47">member Series.TryGet : key:&#39;K -&gt; OptionalValue&lt;&#39;V&gt;<br />member Series.TryGet : key:&#39;K * lookup:Lookup -&gt; OptionalValue&lt;&#39;V&gt;</div>
+<div class="tip" id="fs48">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs49">member ObjectSeries.GetAs : column:&#39;K -&gt; &#39;R<br />member ObjectSeries.GetAs : column:&#39;K * fallback:&#39;R -&gt; &#39;R</div>
+<div class="tip" id="fs50">Multiple items<br />type Link =<br />&#160;&#160;new : unit -&gt; Link<br />&#160;&#160;member ShouldSerializecolor : unit -&gt; bool<br />&#160;&#160;member color : Color<br />&#160;&#160;member color : Color with set<br /><br />Full name: XPlot.GoogleCharts.Configuration.Link<br /><br />--------------------<br />new : unit -&gt; Link</div>
+<div class="tip" id="fs51">member ObjectSeries.TryGetAs : column:&#39;K -&gt; OptionalValue&lt;&#39;R&gt;<br />member ObjectSeries.TryGetAs : column:&#39;K * conversionKind:ConversionKind -&gt; OptionalValue&lt;&#39;R&gt;</div>
+<div class="tip" id="fs52">Multiple items<br />module OptionalValue<br /><br />from Deedle<br /><br />--------------------<br />type OptionalValue<br /><br />Full name: Deedle.OptionalValue<br /><br />--------------------<br />type OptionalValue&lt;&#39;T&gt; =<br />&#160;&#160;struct<br />&#160;&#160;&#160;&#160;new : value:&#39;T -&gt; OptionalValue&lt;&#39;T&gt;<br />&#160;&#160;&#160;&#160;private new : hasValue:bool * value:&#39;T -&gt; OptionalValue&lt;&#39;T&gt;<br />&#160;&#160;&#160;&#160;override Equals : y:obj -&gt; bool<br />&#160;&#160;&#160;&#160;override GetHashCode : unit -&gt; int<br />&#160;&#160;&#160;&#160;override ToString : unit -&gt; string<br />&#160;&#160;&#160;&#160;member HasValue : bool<br />&#160;&#160;&#160;&#160;member Value : &#39;T<br />&#160;&#160;&#160;&#160;member ValueOrDefault : &#39;T<br />&#160;&#160;&#160;&#160;static member Missing : OptionalValue&lt;&#39;T&gt;<br />&#160;&#160;end<br /><br />Full name: Deedle.OptionalValue&lt;_&gt;<br /><br />--------------------<br />OptionalValue()<br />new : value:&#39;T -&gt; OptionalValue&lt;&#39;T&gt;</div>
+<div class="tip" id="fs53">val asOption : value:&#39;T opt -&gt; &#39;T option<br /><br />Full name: Deedle.OptionalValue.asOption</div>
+<div class="tip" id="fs54">union case DataSegmentKind.Complete: DataSegmentKind</div>
+<div class="tip" id="fs55">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs56">val ofSeq : source:seq&lt;&#39;T&gt; -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.ofSeq</div>
+<div class="tip" id="fs57">val filter : predicate:(&#39;T -&gt; bool) -&gt; array:&#39;T [] -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.filter</div>
+<div class="tip" id="fs58">val d : Fundraiser</div>
+<div class="tip" id="fs59">property DateTime.Year: int</div>
+<div class="tip" id="fs60">property DateTime.Month: int</div>
+<div class="tip" id="fs61">val countBy : projection:(&#39;T -&gt; &#39;Key) -&gt; array:&#39;T [] -&gt; (&#39;Key * int) [] (requires equality)<br /><br />Full name: Microsoft.FSharp.Collections.Array.countBy</div>
+<div class="tip" id="fs62">type Chart =<br />&#160;&#160;static member Annotation : data:seq&lt;#seq&lt;DateTime * &#39;V * string * string&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires &#39;V :&gt; value)<br />&#160;&#160;static member Annotation : data:seq&lt;DateTime * #value * string * string&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;static member Area : data:seq&lt;#seq&lt;&#39;K * &#39;V&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires &#39;K :&gt; key and &#39;V :&gt; value)<br />&#160;&#160;static member Area : data:seq&lt;#key * #value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;static member Area : data:seq&lt;#value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;static member Bar : data:seq&lt;#seq&lt;&#39;K * &#39;V&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires &#39;K :&gt; key and &#39;V :&gt; value)<br />&#160;&#160;static member Bar : data:seq&lt;#key * #value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;static member Bar : data:seq&lt;#value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;static member Bubble : data:seq&lt;string * #value * #value * #value * #value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;static member Bubble : data:seq&lt;string * #value * #value * #value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />&#160;&#160;...<br /><br />Full name: XPlot.GoogleCharts.Chart</div>
+<div class="tip" id="fs63">static member Chart.Column : data:Frame&lt;&#39;K,&#39;V&gt; * ?Options:Options -&gt; GoogleChart (requires equality and equality)<br />static member Chart.Column : data:Series&lt;&#39;K,#value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires equality and &#39;K :&gt; key)<br />static member Chart.Column : data:seq&lt;Series&lt;&#39;K,#value&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires equality and &#39;K :&gt; key)<br />static member Chart.Column : data:seq&lt;#seq&lt;&#39;K * &#39;V&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires &#39;K :&gt; key and &#39;V :&gt; value)<br />static member Chart.Column : data:seq&lt;#key * #value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />static member Chart.Column : data:seq&lt;#value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart</div>
+<div class="tip" id="fs64">val firstScrape : DateTime<br /><br />Full name: Fundraisers.firstScrape</div>
+<div class="tip" id="fs65">val lastScrape : DateTime<br /><br />Full name: Fundraisers.lastScrape</div>
+<div class="tip" id="fs66">val weeks : n:int -&gt; TimeSpan<br /><br />Full name: Fundraisers.weeks</div>
+<div class="tip" id="fs67">val n : int</div>
+<div class="tip" id="fs68">Multiple items<br />type TimeSpan =<br />&#160;&#160;struct<br />&#160;&#160;&#160;&#160;new : ticks:int64 -&gt; TimeSpan + 3 overloads<br />&#160;&#160;&#160;&#160;member Add : ts:TimeSpan -&gt; TimeSpan<br />&#160;&#160;&#160;&#160;member CompareTo : value:obj -&gt; int + 1 overload<br />&#160;&#160;&#160;&#160;member Days : int<br />&#160;&#160;&#160;&#160;member Duration : unit -&gt; TimeSpan<br />&#160;&#160;&#160;&#160;member Equals : value:obj -&gt; bool + 1 overload<br />&#160;&#160;&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;&#160;&#160;member Hours : int<br />&#160;&#160;&#160;&#160;member Milliseconds : int<br />&#160;&#160;&#160;&#160;member Minutes : int<br />&#160;&#160;&#160;&#160;...<br />&#160;&#160;end<br /><br />Full name: System.TimeSpan<br /><br />--------------------<br />TimeSpan()<br />TimeSpan(ticks: int64) : unit<br />TimeSpan(hours: int, minutes: int, seconds: int) : unit<br />TimeSpan(days: int, hours: int, minutes: int, seconds: int) : unit<br />TimeSpan(days: int, hours: int, minutes: int, seconds: int, milliseconds: int) : unit</div>
+<div class="tip" id="fs69">TimeSpan.FromDays(value: float) : TimeSpan</div>
+<div class="tip" id="fs70">Multiple items<br />val float : value:&#39;T -&gt; float (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.float<br /><br />--------------------<br />type float = Double<br /><br />Full name: Microsoft.FSharp.Core.float<br /><br />--------------------<br />type float&lt;&#39;Measure&gt; = float<br /><br />Full name: Microsoft.FSharp.Core.float&lt;_&gt;</div>
+<div class="tip" id="fs71">val day : n:int -&gt; TimeSpan<br /><br />Full name: Fundraisers.day</div>
+<div class="tip" id="fs72">val byAge : lo:int -&gt; hi:int option -&gt; data:Fundraiser [] -&gt; Fundraiser []<br /><br />Full name: Fundraisers.byAge</div>
+<div class="tip" id="fs73">val lo : int</div>
+<div class="tip" id="fs74">val hi : int option</div>
+<div class="tip" id="fs75">val data : Fundraiser []</div>
+<div class="tip" id="fs76">property Option.Value: DateTime</div>
+<div class="tip" id="fs77">property Option.Value: int</div>
+<div class="tip" id="fs78">val keys : data:seq&lt;Fundraiser&gt; -&gt; seq&lt;&#39;a&gt; (requires comparison)<br /><br />Full name: Fundraisers.keys</div>
+<div class="tip" id="fs79">val data : seq&lt;Fundraiser&gt;</div>
+<div class="tip" id="fs80">val distinct : source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt; (requires equality)<br /><br />Full name: Microsoft.FSharp.Collections.Seq.distinct</div>
+<div class="tip" id="fs81">val sort : source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt; (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Seq.sort</div>
+<div class="tip" id="fs82">val realign : keys:seq&lt;&#39;a&gt; -&gt; data:seq&lt;&#39;a * int&gt; -&gt; (&#39;a * int) list (requires equality)<br /><br />Full name: Fundraisers.realign</div>
+<div class="tip" id="fs83">val keys : seq&lt;&#39;a&gt; (requires equality)</div>
+<div class="tip" id="fs84">val data : seq&lt;&#39;a * int&gt; (requires equality)</div>
+<div class="tip" id="fs85">val lookup : IDictionary&lt;&#39;a,int&gt; (requires equality)</div>
+<div class="tip" id="fs86">val dict : keyValuePairs:seq&lt;&#39;Key * &#39;Value&gt; -&gt; IDictionary&lt;&#39;Key,&#39;Value&gt; (requires equality)<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.dict</div>
+<div class="tip" id="fs87">val k : &#39;a (requires equality)</div>
+<div class="tip" id="fs88">IDictionary.ContainsKey(key: &#39;a) : bool</div>
+<div class="tip" id="fs89">val countsByAge : lo:int -&gt; hi:int option -&gt; data:Fundraiser [] -&gt; (DateTime * int) list<br /><br />Full name: Fundraisers.countsByAge</div>
+<div class="tip" id="fs90">val recent : Fundraiser []<br /><br />Full name: Fundraisers.recent</div>
+<div class="tip" id="fs91">static member Chart.WithOptions : options:Options -&gt; chart:GoogleChart -&gt; GoogleChart</div>
+<div class="tip" id="fs92">Multiple items<br />type Options =<br />&#160;&#160;new : unit -&gt; Options<br />&#160;&#160;member ShouldSerializeaggregationTarget : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeallValuesSuffix : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeallowHtml : unit -&gt; bool<br />&#160;&#160;member ShouldSerializealternatingRowStyle : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeanimation : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeannotations : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeannotationsWidth : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeareaOpacity : unit -&gt; bool<br />&#160;&#160;member ShouldSerializeavoidOverlappingGridLines : unit -&gt; bool<br />&#160;&#160;...<br /><br />Full name: XPlot.GoogleCharts.Configuration.Options<br /><br />--------------------<br />new : unit -&gt; Options</div>
+<div class="tip" id="fs93">static member Chart.WithLabels : labels:seq&lt;string&gt; -&gt; chart:GoogleChart -&gt; GoogleChart</div>
+<div class="tip" id="fs94">val valid : Fundraiser []<br /><br />Full name: Fundraisers.valid</div>
+<div class="tip" id="fs95">val ratios : seq&lt;obj * (float * float * float)&gt;<br /><br />Full name: Fundraisers.ratios</div>
+<div class="tip" id="fs96">val zip3 : source1:seq&lt;&#39;T1&gt; -&gt; source2:seq&lt;&#39;T2&gt; -&gt; source3:seq&lt;&#39;T3&gt; -&gt; seq&lt;&#39;T1 * &#39;T2 * &#39;T3&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.zip3</div>
+<div class="tip" id="fs97">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.map</div>
+<div class="tip" id="fs98">val sd : obj</div>
+<div class="tip" id="fs99">val s : int</div>
+<div class="tip" id="fs100">val ld : obj</div>
+<div class="tip" id="fs101">val l : int</div>
+<div class="tip" id="fs102">val vd : obj</div>
+<div class="tip" id="fs103">val v : int</div>
+<div class="tip" id="fs104">val failwith : message:string -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.failwith</div>
+<div class="tip" id="fs105">val tot : float</div>
+<div class="tip" id="fs106">val k : obj</div>
+<div class="tip" id="fs107">val s : float</div>
+<div class="tip" id="fs108">val l : float</div>
+<div class="tip" id="fs109">val v : float</div>
+<div class="tip" id="fs110">val ratiosFrame : Frame&lt;int,string&gt;<br /><br />Full name: Fundraisers.ratiosFrame</div>
+<div class="tip" id="fs111">static member Frame.ofRecords : series:Series&lt;&#39;K,&#39;R&gt; -&gt; Frame&lt;&#39;K,string&gt; (requires equality)<br />static member Frame.ofRecords : values:seq&lt;&#39;T&gt; -&gt; Frame&lt;int,string&gt;<br />static member Frame.ofRecords : values:Collections.IEnumerable * indexCol:string -&gt; Frame&lt;&#39;R,string&gt; (requires equality)</div>
+<div class="tip" id="fs112">val expandCols : names:seq&lt;string&gt; -&gt; frame:Frame&lt;&#39;R,string&gt; -&gt; Frame&lt;&#39;R,string&gt; (requires equality)<br /><br />Full name: Deedle.Frame.expandCols</div>
+<div class="tip" id="fs113">val indexColsWith : keys:seq&lt;&#39;C2&gt; -&gt; frame:Frame&lt;&#39;R,&#39;C1&gt; -&gt; Frame&lt;&#39;R,&#39;C2&gt; (requires equality and equality and equality)<br /><br />Full name: Deedle.Frame.indexColsWith</div>
+<div class="tip" id="fs114">val frame : columns:seq&lt;&#39;a * #ISeries&lt;&#39;c&gt;&gt; -&gt; Frame&lt;&#39;c,&#39;a&gt; (requires equality and equality)<br /><br />Full name: Deedle.F# Frame extensions.frame</div>
+<div class="tip" id="fs115">type Stats =<br />&#160;&#160;static member count : frame:Frame&lt;&#39;R,&#39;C&gt; -&gt; Series&lt;&#39;C,int&gt; (requires equality and equality)<br />&#160;&#160;static member count : series:Series&lt;&#39;K,&#39;V&gt; -&gt; int (requires equality)<br />&#160;&#160;static member expandingCount : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingKurt : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingMax : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingMean : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingMin : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingSkew : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingStdDev : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;static member expandingSum : series:Series&lt;&#39;K,float&gt; -&gt; Series&lt;&#39;K,float&gt; (requires equality)<br />&#160;&#160;...<br /><br />Full name: Deedle.Stats</div>
+<div class="tip" id="fs116">static member Stats.mean : frame:Frame&lt;&#39;R,&#39;C&gt; -&gt; Series&lt;&#39;C,float&gt; (requires equality and equality)<br />static member Stats.mean : series:Series&lt;&#39;K,float&gt; -&gt; float (requires equality)</div>
+<div class="tip" id="fs117">static member Stats.stdDev : frame:Frame&lt;&#39;R,&#39;C&gt; -&gt; Series&lt;&#39;C,float&gt; (requires equality and equality)<br />static member Stats.stdDev : series:Series&lt;&#39;K,float&gt; -&gt; float (requires equality)</div>
+<div class="tip" id="fs118">val srat : float<br /><br />Full name: Fundraisers.srat</div>
+<div class="tip" id="fs119">val nrat : float<br /><br />Full name: Fundraisers.nrat</div>
+<div class="tip" id="fs120">val lrat : float<br /><br />Full name: Fundraisers.lrat</div>
+<div class="tip" id="fs121">val m : Series&lt;string,float&gt;</div>
+<div class="tip" id="fs122">val estimated : ratio:&#39;a -&gt; data:Fundraiser [] -&gt; &#39;b list<br /><br />Full name: Fundraisers.estimated</div>
+<div class="tip" id="fs123">val ratio : &#39;a</div>
+<div class="tip" id="fs124">val estimatable : Fundraiser []<br /><br />Full name: Fundraisers.estimatable</div>
+<div class="tip" id="fs125">val zeroBefore : dt:&#39;a -&gt; data:seq&lt;&#39;a * int&gt; -&gt; (&#39;a * int) list (requires comparison)<br /><br />Full name: Fundraisers.zeroBefore</div>
+<div class="tip" id="fs126">val dt : &#39;a (requires comparison)</div>
+<div class="tip" id="fs127">val data : seq&lt;&#39;a * int&gt; (requires comparison)</div>
+<div class="tip" id="fs128">val d : &#39;a (requires comparison)</div>
+<div class="tip" id="fs129">val zeroAfter : dt:&#39;a -&gt; data:seq&lt;&#39;a * int&gt; -&gt; (&#39;a * int) list (requires comparison)<br /><br />Full name: Fundraisers.zeroAfter</div>
+<div class="tip" id="fs130">val lines : (DateTime * int) list list<br /><br />Full name: Fundraisers.lines</div>
+<div class="tip" id="fs131">val labels : string list<br /><br />Full name: Fundraisers.labels</div>
+<div class="tip" id="fs132">val reduce : reduction:(&#39;T -&gt; &#39;T -&gt; &#39;T) -&gt; source:seq&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Collections.Seq.reduce</div>
+<div class="tip" id="fs133">Multiple items<br />type List&lt;&#39;T&gt; =<br />&#160;&#160;new : unit -&gt; List&lt;&#39;T&gt; + 2 overloads<br />&#160;&#160;member Add : item:&#39;T -&gt; unit<br />&#160;&#160;member AddRange : collection:IEnumerable&lt;&#39;T&gt; -&gt; unit<br />&#160;&#160;member AsReadOnly : unit -&gt; ReadOnlyCollection&lt;&#39;T&gt;<br />&#160;&#160;member BinarySearch : item:&#39;T -&gt; int + 2 overloads<br />&#160;&#160;member Capacity : int with get, set<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Contains : item:&#39;T -&gt; bool<br />&#160;&#160;member ConvertAll&lt;&#39;TOutput&gt; : converter:Converter&lt;&#39;T, &#39;TOutput&gt; -&gt; List&lt;&#39;TOutput&gt;<br />&#160;&#160;member CopyTo : array:&#39;T[] -&gt; unit + 2 overloads<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br /><br />Full name: System.Collections.Generic.List&lt;_&gt;<br /><br />--------------------<br />List() : unit<br />List(capacity: int) : unit<br />List(collection: IEnumerable&lt;&#39;T&gt;) : unit</div>
+<div class="tip" id="fs134"></div>
+<div class="tip" id="fs135">static member Chart.Area : data:Frame&lt;&#39;K,&#39;V&gt; * ?Options:Options -&gt; GoogleChart (requires equality and equality)<br />static member Chart.Area : data:Series&lt;&#39;K,#value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires equality and &#39;K :&gt; key)<br />static member Chart.Area : data:seq&lt;Series&lt;&#39;K,#value&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires equality and &#39;K :&gt; key)<br />static member Chart.Area : data:seq&lt;#seq&lt;&#39;K * &#39;V&gt;&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart (requires &#39;K :&gt; key and &#39;V :&gt; value)<br />static member Chart.Area : data:seq&lt;#key * #value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart<br />static member Chart.Area : data:seq&lt;#value&gt; * ?Labels:seq&lt;string&gt; * ?Options:Options -&gt; GoogleChart</div>
+<div class="tip" id="fs136">val zip : source1:seq&lt;&#39;T1&gt; -&gt; source2:seq&lt;&#39;T2&gt; -&gt; seq&lt;&#39;T1 * &#39;T2&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.zip</div>
+<div class="tip" id="fs137">val series : observations:seq&lt;&#39;a * &#39;b&gt; -&gt; Series&lt;&#39;a,&#39;b&gt; (requires equality)<br /><br />Full name: Deedle.F# Series extensions.series</div>
+<div class="tip" id="fs138">val mapRowKeys : f:(&#39;R1 -&gt; &#39;R2) -&gt; frame:Frame&lt;&#39;R1,&#39;C&gt; -&gt; Frame&lt;&#39;R2,&#39;C&gt; (requires equality and equality and equality)<br /><br />Full name: Deedle.Frame.mapRowKeys</div>
+<div class="tip" id="fs139">val rk : obj</div>
+<div class="tip" id="fs140">Object.ToString() : string</div>
+
+
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>
