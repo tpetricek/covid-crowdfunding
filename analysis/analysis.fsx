@@ -22,12 +22,17 @@ replaces older records with newer (with more data about individual
 donations hopefully).
 
 *)
+let scrapes = 
+  [ "2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"
+    "2020-07-12"; "2020-07-26"; "2020-08-09"; "2020-08-23" ]
+
 let mergeFiles (files:seq<string * string>) = 
   let res = Dictionary<_, _>()
   for s, f in files do
     let df = Frame.ReadCsv(f,inferTypes=false)
     for r in df.Rows.Values do
       let url = r.GetAs<string>("Link")
+      if String.IsNullOrEmpty (r.GetAs<string>("Created")) then failwithf "EMpty: %s" f
       res.[url] <- 
         Series.merge (series ["Source" => box s])
           r.[["Link"; "Created"; "MostRecentDonation"; "Donations"; "Raised"; "Complete"]] 
@@ -36,7 +41,7 @@ let mergeFiles (files:seq<string * string>) =
 
 let files = 
   [ for s in ["gofundme"; "just"; "virgin"] do
-    for d in ["2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"; "2020-07-12"; "2020-07-26" ] do 
+    for d in scrapes do 
     for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
     yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
 
@@ -326,10 +331,7 @@ For the fundraisers that disappeared, how old they were (in weeks) when
 they disappeared from our dataset?
 *)
 (*** define-output:r1 ***)
-removed 
-  [ "2020-05-17","2020-06-01"; 
-    "2020-06-01","2020-06-14"; 
-    "2020-06-14","2020-06-29"]
+removed (Seq.pairwise scrapes)
 |> Array.map (snd >> snd)
 |> Array.countBy id
 |> Array.sortBy fst
@@ -339,10 +341,7 @@ removed
 Looking only at those that disappeared after less than 10 weeks:
 *)
 (*** define-output:r2 ***)
-removed 
-  [ "2020-05-17","2020-06-01"; 
-    "2020-06-01","2020-06-14"; 
-    "2020-06-14","2020-06-29"]
+removed (Seq.pairwise scrapes)
 |> Array.map (snd >> snd)
 |> Array.filter (fun w -> w < 10)
 |> Array.countBy id
@@ -356,10 +355,7 @@ in March 2020 or later, how many of those disappeared between
 *)
 (*** define-output:r3 ***)
 let removedKeys = 
-  removed 
-    [ "2020-05-17","2020-06-01"; 
-      "2020-06-01","2020-06-14"; 
-      "2020-06-14","2020-06-29"]
+  removed (Seq.pairwise scrapes)
   |> Array.map fst |> set
 
 let getRemovedOrNot removed = 
@@ -411,13 +407,7 @@ merged data set generated earlier, now with an extra column `Removed` which indi
 whether a fundraiser has been removed (and if so, when).
 *)
 let removedSeries = 
-  removed 
-    [ "2020-05-17","2020-06-01"; 
-      "2020-06-01","2020-06-14"; 
-      "2020-06-14","2020-06-29"; 
-      "2020-06-29","2020-07-12";
-      "2020-07-12","2020-07-26";
-      ]
+  removed (Seq.pairwise scrapes)  
   |> Array.map (fun (k, (dt, _)) -> k, dt.ToString("yyyy-MM-dd")) 
   |> series
 
