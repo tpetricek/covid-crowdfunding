@@ -24,7 +24,8 @@ donations hopefully).
 *)
 let scrapes = 
   [ "2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"
-    "2020-07-12"; "2020-07-26"; "2020-08-09"; "2020-08-23" ]
+    "2020-07-12"; "2020-07-26"; "2020-08-09"; "2020-08-23"
+    "2020-09-06" ]
 
 let mergeFiles (files:seq<string * string>) = 
   let res = Dictionary<_, _>()
@@ -32,7 +33,7 @@ let mergeFiles (files:seq<string * string>) =
     let df = Frame.ReadCsv(f,inferTypes=false)
     for r in df.Rows.Values do
       let url = r.GetAs<string>("Link")
-      if String.IsNullOrEmpty (r.GetAs<string>("Created")) then failwithf "EMpty: %s" f
+      //if String.IsNullOrEmpty (r.GetAs<string>("Created")) then failwithf "EMpty: %s" f
       res.[url] <- 
         Series.merge (series ["Source" => box s])
           r.[["Link"; "Created"; "MostRecentDonation"; "Donations"; "Raised"; "Complete"]] 
@@ -409,6 +410,10 @@ whether a fundraiser has been removed (and if so, when).
 let removedSeries = 
   removed (Seq.pairwise scrapes)  
   |> Array.map (fun (k, (dt, _)) -> k, dt.ToString("yyyy-MM-dd")) 
+  |> Seq.groupBy fst
+  |> Seq.map (fun (k, vs) -> 
+    if Seq.length vs > 1 then printf "REMOVED REPEATEDLY: %A" vs
+    k, Seq.head vs)
   |> series
 
 let withRemoved = merged |> Frame.addCol "Removed" removedSeries

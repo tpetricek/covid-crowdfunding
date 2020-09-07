@@ -56,7 +56,7 @@ let merged =
       MostRecentDonation = r.TryGetAs "MostRecentDonation" |> OptionalValue.asOption 
       Raised = r.GetAs "Raised"; Complete = r.GetAs "Complete"; 
       Donations = r.GetAs "Donations" |> parseDonations; 
-      Removed = r.TryGetAs "Removed" |> OptionalValue.asOption 
+      Removed = try r.TryGetAs "Removed" |> OptionalValue.asOption with _ -> None
       Week = previousSunday (r.GetAs "Created") } |> Some ) 
   |> Array.ofSeq
 (**
