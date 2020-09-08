@@ -1,11 +1,14 @@
 (*** hide ***)
 #load "packages/FsLab/Themes/DefaultWhite.fsx"
+#load "packages/FsLab/FsLab.fsx"
+type FormattedChart = FormattedChart of XPlot.GoogleCharts.GoogleChart
 #if HAS_FSI_ADDHTMLPRINTER
+fsi.HtmlPrinterParameters.["html-standalone-output"] <- true
 fsi.HtmlPrinterParameters.["grid-row-counts"] <- "100,100"
 fsi.HtmlPrinterParameters.["grid-column-counts"] <- "100,100"
-printfn "Yadda!"
+fsi.AddHtmlPrinter(fun (FormattedChart ch) ->
+  [] :> seq<_>, ch.GetInlineHtml())
 #endif
-#load "packages/FsLab/FsLab.fsx"
 open System
 open System.Collections.Generic
 open Deedle
@@ -88,24 +91,22 @@ This will need some data processing - the key function here is `byAge`, which fi
 data and returns only fundraisers that have an age in the specified range.
 *)
 let firstScrape = DateTime.Parse "2020-05-17"
-let lastScrape = DateTime.Parse "2020-08-23"
+let lastScrape = DateTime.Parse "2020-09-06"
 
 let weeks n = TimeSpan.FromDays(7.0 * float n)
 let day n = TimeSpan.FromDays(float n)
 
-let byAge lo hi data = 
-  data
-  |> Array.filter (fun d -> 
-    if hi = None then
-      // Has been around for at least 'lo' days
-      if d.Removed = None then (lastScrape - d.Created).TotalDays >= float lo
-      else (d.Removed.Value - d.Created).TotalDays >= float lo
+let byAge lo hi d = 
+  if hi = None then
+    // Has been around for at least 'lo' days
+    if d.Removed = None then (lastScrape - d.Created).TotalDays >= float lo
+    else (d.Removed.Value - d.Created).TotalDays >= float lo
+  else 
+    // Has been around between 'lo' and 'hi' days
+    if d.Removed = None then false
     else 
-      // Has been around between 'lo' and 'hi' days
-      if d.Removed = None then false
-      else 
-        (d.Removed.Value - d.Created).TotalDays >= float lo && 
-        (d.Removed.Value - d.Created).TotalDays <= float hi.Value)
+      (d.Removed.Value - d.Created).TotalDays >= float lo && 
+      (d.Removed.Value - d.Created).TotalDays <= float hi.Value
 
 let keys data = 
   [ for d in data -> d.Week ] |> Seq.distinct |> Seq.sort
@@ -115,7 +116,8 @@ let realign keys data =
   [ for k in keys -> k, if lookup.ContainsKey k then lookup.[k] else 0 ]
 
 let countsByAge lo hi data = 
-  byAge lo hi data
+  data 
+  |> Array.filter (byAge lo hi)
   |> Array.countBy (fun d -> d.Week)
   |> realign (keys data)
 (**
@@ -130,29 +132,29 @@ let recent = merged |> Array.filter (fun d ->
   d.Created.Year = 2020 && d.Created.Month > 2)
 
 [ countsByAge 0 (Some 28) recent 
-  countsByAge 29 (Some 56) recent 
-  countsByAge 57 None recent ]
+  countsByAge 29 (Some 70) recent 
+  countsByAge 71 None recent ]
 |> Chart.Column
 |> Chart.WithOptions(Options(isStacked=true)) 
-|> Chart.WithLabels ["0-4 weeks"; "4-8 weeks"; ">8 weeks"]
+|> Chart.WithLabels ["0-4 weeks"; "4-10 weeks"; ">10 weeks"]
 (*** include-it:f2 ***)
 (**
 There are several weeks for which we have full data on all three kinds of fundraisers.
 These are roughly weeks from 1 week before we started scraping (because all fundraisers
-stay at least for a week) until 8 weeks before our last scrape (so that we can identify
+stay at least for a week) until 10 weeks before our last scrape (so that we can identify
 kinds of fundraisers started at this point). So, we have full data for this range:
 *)
 (*** define-output:f3 ***)
 let valid = merged |> Array.filter (fun d -> 
   d.Created >= firstScrape - weeks 1 &&
-  d.Created < lastScrape - weeks 8 - day 1 )
+  d.Created < lastScrape - weeks 10 - day 1 )
 
 [ countsByAge 0 (Some 28) valid
-  countsByAge 29 (Some 56) valid
-  countsByAge 57 None valid ]
+  countsByAge 29 (Some 70) valid
+  countsByAge 71 None valid ]
 |> Chart.Column
 |> Chart.WithOptions(Options(isStacked=true)) 
-|> Chart.WithLabels ["0-4 weeks"; "4-8 weeks"; ">8 weeks"]
+|> Chart.WithLabels ["0-4 weeks"; "4-10 weeks"; ">10 weeks"]
 (*** include-it:f3 ***)
 (**
 ## Calculating ratios of fundraiser types
@@ -164,8 +166,8 @@ we can see how much variance there is between different weeks.
 let ratios = 
   Seq.zip3
     (countsByAge 0 (Some 28) valid)
-    (countsByAge 29 (Some 56) valid)
-    (countsByAge 57 None valid)
+    (countsByAge 29 (Some 70) valid)
+    (countsByAge 71 None valid)
   |> Seq.map (fun ((sd, s), (ld, l), (vd, v)) ->
     if sd <> ld || ld <> vd then failwith "Should not happen"
     let tot = float (s + l + v)
@@ -176,7 +178,7 @@ let ratios =
   ratios |> Seq.map (fun (k, (s, l, v)) -> k, v) ]
 |> Chart.Column
 |> Chart.WithOptions(Options(isStacked=true)) 
-|> Chart.WithLabels ["0-4 weeks"; "4-8 weeks"; ">8 weeks"]
+|> Chart.WithLabels ["0-4 weeks"; "4-10 weeks"; ">10 weeks"]
 (*** include-it:f4 ***)
 (**
 Let's now calculate the mean of ratios, together with variance and standard deviation
@@ -192,7 +194,7 @@ let ratiosFrame =
 
 frame [
   "Mean" => (ratiosFrame |> Stats.mean)
-  "Variance" => (ratiosFrame |> Stats.stdDev)
+  "Variance" => (ratiosFrame |> Stats.variance)
   "Sdv" => (ratiosFrame |> Stats.stdDev) ]
 (*** include-it:f5 ***)
 (**
@@ -201,23 +203,35 @@ Finally, we're going to calculate the average ratios and estimate the number of 
 For this, we need some more helper functions. We can now reasonably give the number of 
 fundraisers from 8 weeks before our first scrape until 8 weeks before our last scrape 
 (we could add undetermined fundraisers at the end, but I'm too lazy to do that...).
-*)
-let srat, nrat, lrat = 
-  let m = Stats.mean ratiosFrame
-  m?Short, m?Normal, m?Long
 
-let estimated ratio data =
-  [ for k, v in countsByAge 57 None data ->
-      k, int (float v / lrat * ratio) ]
+For predicted values, the following code also computes a predicted value as multipled by
+the estimated ratio - standard deviation and the estimated ratio + standard deviation. This
+gives us a range within which we expect the actual values - even if our estimation mechanism
+is not perfect.
+*)
+let getRatios (ratiosFrame:Frame<_, _>) = 
+  let m = Stats.mean ratiosFrame
+  let s = Stats.stdDev ratiosFrame
+  (m?Short, s?Short), (m?Normal, s?Normal), (m?Long, s?Long)
+
+let srat, nrat, lrat = getRatios ratiosFrame
 
 let estimatable = merged |> Array.filter (fun d -> 
-  d.Created >= firstScrape - weeks 8 && 
-  d.Created < lastScrape - weeks 8 - day 1 )
+  d.Created >= firstScrape - weeks 10 && 
+  d.Created < lastScrape - weeks 10 - day 1 )
 
-let zeroBefore dt data = 
-  [ for d, v in data -> d, if d < dt then 0 else v ]
-let zeroAfter dt data = 
-  [ for d, v in data -> d, if d >= dt then 0 else v ]
+let estimated f ratio =
+  [ for k, v in countsByAge 71 None estimatable ->
+      // Calculate predicted, predicted-sdv, predicted+sdv
+      let vl = int (float v / fst lrat * fst ratio)
+      let vminus = int (float v / fst lrat * (fst ratio - snd ratio))
+      let vplus = int (float v / fst lrat * (fst ratio + snd ratio))
+      k, f (vl, (vminus, vplus)) ]
+
+let zeroBefore z dt data = 
+  [ for d, v in data -> d, if d < dt then z else v ]
+let zeroAfter z dt data = 
+  [ for d, v in data -> d, if d >= dt then z else v ]
 (**
 The following is the final chart! It shows the total number of fundraisers per week
 (starting on Sunday) for all dates for which we know or can reasonably estimate. It shows
@@ -227,13 +241,13 @@ from 8-0 weeks before our first scrape.
 *)
 (*** define-output:f6 ***)
 let lines = 
-  [ countsByAge 0 (Some 28) estimatable |> zeroBefore firstScrape
-    estimated srat estimatable |> zeroAfter firstScrape
-    countsByAge 29 (Some 56) estimatable |> zeroBefore (firstScrape - weeks 4)
-    estimated nrat estimatable |> zeroAfter (firstScrape - weeks 4)
-    countsByAge 57 None estimatable ]
+  [ countsByAge 0 (Some 28) estimatable |> zeroBefore 0 firstScrape
+    estimated fst srat |> zeroAfter 0 firstScrape
+    countsByAge 29 (Some 70) estimatable |> zeroBefore 0 (firstScrape - weeks 4)
+    estimated fst nrat |> zeroAfter 0 (firstScrape - weeks 4)
+    countsByAge 71 None estimatable ]
 let labels = 
-  ["0-4 weeks"; "0-4 (pred)"; "4-8 weeks"; "4-8 (pred)"; ">8 weeks"]
+  ["0-4 weeks"; "0-4 (pred)"; "4-10 weeks"; "4-10 (pred)"; ">10 weeks"]
 
 lines
 |> Chart.Column
@@ -242,7 +256,8 @@ lines
 (*** include-it:f6 ***)
 (**
 We can add all the data together and show this as a line chart, showing the total number
-of fundraisers started:
+of fundraisers started. This is based on the mean predictions. The table below lets us
+see the error ranges.
 *)
 (*** define-output:f7 ***)
 lines
@@ -250,12 +265,309 @@ lines
 |> Chart.Area
 (*** include-it:f7 ***)
 (**
-The full data for each week in a convenient data table that is easy to copy and analyse further:
+
+The full data for each week in a convenient data table that is easy to copy and analyse further.
+For each predicted value, we include the mean column, a column based on ratio-sdv and a column
+based on a ratio+sdv. The Total column is just the total; Total-sdv sums the low estimates and
+Total+sdv sums the high estimates.
 *)
 (*** define-output:f8 ***)
-frame
-  [ for lb, l in Seq.zip labels lines do
-      yield lb => series l 
-    yield "Total" => series (Seq.reduce (List.map2 (fun (d, a) (_, b) -> d, a + b)) lines) ]
-|> Frame.mapRowKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
-(*** include-it:f8 ***)
+let trip (k, v) = k, (v, v, v)
+let flat (v, (v1, v2)) = v, v1, v2
+let linesErr = 
+  [ countsByAge 0 (Some 28) estimatable 
+      |> Seq.map trip |> zeroBefore (0, 0, 0) firstScrape
+    estimated flat srat |> zeroAfter (0, 0, 0) firstScrape
+    countsByAge 29 (Some 70) estimatable 
+      |> Seq.map trip |> zeroBefore (0, 0, 0) (firstScrape - weeks 4)
+    estimated flat nrat |> zeroAfter (0, 0, 0) (firstScrape - weeks 4)
+    countsByAge 71 None estimatable |> List.map trip ]
+
+let df1 = 
+  frame
+    [ for lb, l in Seq.zip labels linesErr do
+        yield lb => series l ]
+  |> Frame.mapRowKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
+  |> Frame.expandAllCols 1
+
+let df2 = 
+  Seq.fold (fun df c -> Frame.dropCol c df) df1
+    [ for s in ["0-4 weeks"; "4-10 weeks"; ">10 weeks"] do
+        yield! [s + ".Item2"; s + ".Item3" ] ]
+  |> Frame.mapColKeys (fun ck ->
+      ck.Replace("(pred).Item2", "(pred-sdv)")
+        .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
+
+let tt = df2?``0-4 weeks`` + df2?``4-10 weeks`` + df2?``>10 weeks``
+let ta = tt + df2?``0-4 (pred)`` + df2?``4-10 (pred)``
+let tl = tt + df2?``0-4 (pred-sdv)`` + df2?``4-10 (pred-sdv)``
+let th = tt + df2?``0-4 (pred+sdv)`` + df2?``4-10 (pred+sdv)``
+
+let df3 = 
+  df2 
+  |> Frame.addCol "Total" (Series.mapValues int ta)
+  |> Frame.addCol "Total (-sdv)" (Series.mapValues int tl)
+  |> Frame.addCol "Total (+sdv)" (Series.mapValues int th)
+
+df3
+(*** include-it:f8 ***) 
+(**
+
+Now that we have the error ranges, we can also draw a chart showing our estimate alongside
+with our estimated error ranges. This suggests that our prediction based on ratio of 
+short-term/mid-term/long-term fundraisers is a fairly reasonable - this is quite likely 
+less of a source for error than the variance inherent in the data we scraped.
+*)
+(*** define-output:f9 ***)
+[ df3?``Total (-sdv)`` |> Series.mapKeys DateTime.Parse 
+  df3?``Total (+sdv)`` |> Series.mapKeys DateTime.Parse
+  df3?Total |> Series.mapKeys DateTime.Parse ]
+|> Chart.Line
+|> Chart.WithOptions(Options(curveType="function", 
+    colors=[|"#c0c0c0"; "#c0c0c0"; "#ff7f0e"|]))
+|> Chart.WithSize (800, 400)
+|> FormattedChart
+(*** include-it:f9 ***) 
+(**
+# Exploring individual donation data
+
+We can perform exactly the same calculation as above to get a chart showing the individual
+donations. There is a caveat - we do not have full data on all fundraisers, so this is not
+going to give us the correct total number of money donated!
+
+However, as the [earlier analaysis suggests](analysis.html), the fundraisers for which data
+is missing do not seem to be special in any way, so we can still reasonably try to do this,
+at least to look at the trends.
+
+## Donations per week in our data
+
+As before, let's first look at the individual donation data that we have in our data set.
+Note that this is misleading, because we only started scraping data in May - so the donations
+for March and April are only those for long-lived fundraisers.
+*)
+(*** define-output:d1 ***) 
+merged 
+|> Seq.collect (fun f -> f.Donations)
+|> Seq.filter (fun (d, _) -> d.Year = 2020 && d.Month > 2)
+|> Seq.groupBy (fun (d, _) -> previousSunday d)
+|> Seq.map (fun (w, vs) -> w, Seq.sumBy snd vs)
+|> Chart.Column
+(*** include-it:d1 ***) 
+
+(**
+## Donations by fundraiser length
+
+As before, we can show the data based on the kind of fundraiser. For fundraisers that stay
+on the web site for >10 weeks, we have data going back to March. For fundraisers that stay online
+for shorter period, we only have data for later, but we can estimate those.
+*)
+(*** define-output:d2 ***) 
+let donationsByAge keys lo hi lod hid source = 
+  source
+  |> Seq.filter (byAge lo hi)
+  |> Seq.collect (fun f -> f.Donations)
+  |> Seq.filter (fun (d, _) -> d > lod && d < hid)
+  |> Seq.groupBy (fun (d, _) -> previousSunday d)
+  |> Seq.map (fun (w, vs) -> w, Seq.sumBy snd vs)
+  |> realign keys
+
+let recentKeys = 
+  recent |> Seq.collect (fun d -> d.Donations) 
+    |> Seq.map (fst >> previousSunday) |> Seq.distinct |> Seq.sort  
+
+[ recent |> donationsByAge recentKeys 0 (Some 28) firstScrape lastScrape
+  recent |> donationsByAge recentKeys 29 (Some 70) (firstScrape - weeks 4) (lastScrape - weeks 4)
+  recent |> donationsByAge recentKeys 71 None (firstScrape - weeks 10) (lastScrape - weeks 10) ] 
+|> Chart.Column
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels ["0-4 weeks"; "4-10 weeks"; ">10 weeks"]
+(*** include-it:d2 ***) 
+(**
+Looking at the range for which we have correct data for all fundraiser types, we get:
+*)
+(*** define-output:d3 ***) 
+let validKeys = 
+  valid |> Seq.collect (fun d -> d.Donations) 
+    |> Seq.map (fst >> previousSunday) |> Seq.distinct 
+    |> Seq.filter (fun v -> v < lastScrape - weeks 10) |> Seq.sort  
+
+[ valid |> donationsByAge validKeys 0 (Some 28) (firstScrape - weeks 1) (lastScrape - weeks 10)
+  valid |> donationsByAge validKeys 29 (Some 70) (firstScrape - weeks 4) (lastScrape - weeks 10)
+  valid |> donationsByAge validKeys 71 None (firstScrape - weeks 10) (lastScrape - weeks 10) ] 
+|> Chart.Column
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels ["0-4 weeks"; "4-10 weeks"; ">10 weeks"]
+(*** include-it:d3 ***) 
+(**
+
+## Calculating ratios of donations by fundraiser types
+As before, we can estimate the ratio of donations belonging to different fundraiser types:
+
+*)
+(*** define-output:d4 ***)
+let ratiosDon = 
+  Seq.zip3
+    (valid |> donationsByAge validKeys 0 (Some 28) (firstScrape - weeks 1) (lastScrape - weeks 10))
+    (valid |> donationsByAge validKeys 29 (Some 70) (firstScrape - weeks 4) (lastScrape - weeks 10))
+    (valid |> donationsByAge validKeys 71 None (firstScrape - weeks 10) (lastScrape - weeks 10))
+  |> Seq.map (fun ((sd, s), (ld, l), (vd, v)) ->
+    if sd <> ld || ld <> vd then failwith "Should not happen"
+    let tot = float (s + l + v)
+    sd, (float s / tot, float l / tot, float v / tot) )
+
+[ ratiosDon |> Seq.map (fun (k, (s, l, v)) -> k, s)
+  ratiosDon |> Seq.map (fun (k, (s, l, v)) -> k, l)
+  ratiosDon |> Seq.map (fun (k, (s, l, v)) -> k, v) ]
+|> Chart.Column
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels ["0-4 weeks"; "4-10 weeks"; ">10 weeks"]
+(*** include-it:d4 ***)
+(**
+There seems to be a bit more variance, but let's proceed and calculate the mean
+and standard deviation of the ratios:
+*)
+(*** define-output:d5 ***)
+let ratiosDonFrame = 
+  ratiosDon 
+  |> Frame.ofRecords
+  |> Frame.expandCols ["Item2"]
+  |> Frame.indexColsWith ["Week"; "Short"; "Normal"; "Long"]
+
+frame [
+  "Mean" => (ratiosDonFrame |> Stats.mean)
+  "Variance" => (ratiosDonFrame |> Stats.variance)
+  "Sdv" => (ratiosDonFrame |> Stats.stdDev) ]
+(*** include-it:d5 ***)
+(**
+Using the same method as before, we can now draw a chart that combines the actual data for
+donations to short term fund-raisers (less than 10 weeks) with estimated data based on 
+long-term fundraisers.
+*) 
+(*** define-output:d6 ***)
+let sratd, nratd, lratd = getRatios ratiosDonFrame
+
+let estimatableKeys = 
+  merged |> Seq.collect (fun d -> d.Donations) 
+    |> Seq.map (fst >> previousSunday) |> Seq.distinct 
+    |> Seq.filter (fun v -> v >= firstScrape - weeks 11 && v < lastScrape - weeks 10) |> Seq.sort  
+
+let longDons = 
+  merged |> donationsByAge estimatableKeys 71 None (firstScrape - weeks 11) (lastScrape - weeks 10)
+
+let estimatedDons f ratio =
+  [ for k, v in longDons ->
+      // Calculate predicted, predicted-sdv, predicted+sdv
+      let vl = int (float v / fst lrat * fst ratio)
+      let vminus = int (float v / fst lrat * (fst ratio - snd ratio))
+      let vplus = int (float v / fst lrat * (fst ratio + snd ratio))
+      k, f (vl, (vminus, vplus)) ]
+
+let dlines = 
+  [ recent |> donationsByAge estimatableKeys 0 (Some 28) (firstScrape - weeks 1) (lastScrape - weeks 10) |> zeroBefore 0 firstScrape
+    estimatedDons fst sratd |> zeroAfter 0 firstScrape
+    recent |> donationsByAge estimatableKeys 29 (Some 70) (firstScrape - weeks 4) (lastScrape - weeks 10) |> zeroBefore 0 (firstScrape - weeks 4)
+    estimatedDons fst nratd |> zeroAfter 0 (firstScrape - weeks 4)
+    recent |> donationsByAge estimatableKeys 71 None (firstScrape - weeks 10) (lastScrape - weeks 10) ] 
+
+dlines
+|> Chart.Column
+|> Chart.WithOptions(Options(isStacked=true)) 
+|> Chart.WithLabels labels
+(*** include-it:d6 ***)
+(**
+As before, we can add all the data together and show this as a line chart, showing the total number
+of donations per week. This is based on the mean predictions. The table below lets us
+see the error ranges.
+*)
+(*** define-output:d7 ***)
+lines
+|> Seq.reduce (List.map2 (fun (d, a) (_, b) -> d, a + b))
+|> Chart.Area
+(*** include-it:d7 ***)
+(*** define-output:d8 ***)
+let linesDonsErr = 
+  [ recent |> donationsByAge estimatableKeys 0 (Some 28) (firstScrape - weeks 1) (lastScrape - weeks 10) 
+      |> Seq.map trip |> zeroBefore (0, 0, 0) firstScrape
+    estimatedDons flat sratd |> zeroAfter (0, 0, 0) firstScrape
+    recent |> donationsByAge estimatableKeys 29 (Some 70) (firstScrape - weeks 4) (lastScrape - weeks 10) 
+      |> Seq.map trip |> zeroBefore (0, 0, 0) (firstScrape - weeks 4)
+    estimatedDons flat nratd |> zeroAfter (0, 0, 0) (firstScrape - weeks 4)
+    recent |> donationsByAge estimatableKeys 71 None (firstScrape - weeks 10) (lastScrape - weeks 10) 
+      |> List.map trip ] 
+
+let dfd1 = 
+  frame
+    [ for lb, l in Seq.zip labels linesDonsErr do
+        yield lb => series l ]
+  |> Frame.mapRowKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
+  |> Frame.expandAllCols 1
+
+let dfd2 = 
+  Seq.fold (fun df c -> Frame.dropCol c df) dfd1
+    [ for s in ["0-4 weeks"; "4-10 weeks"; ">10 weeks"] do
+        yield! [s + ".Item2"; s + ".Item3" ] ]
+  |> Frame.mapColKeys (fun ck ->
+      ck.Replace("(pred).Item2", "(pred-sdv)")
+        .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
+
+let ttd = dfd2?``0-4 weeks`` + dfd2?``4-10 weeks`` + dfd2?``>10 weeks``
+let tad = ttd + dfd2?``0-4 (pred)`` + dfd2?``4-10 (pred)``
+let tld = ttd + dfd2?``0-4 (pred-sdv)`` + dfd2?``4-10 (pred-sdv)``
+let thd = ttd + dfd2?``0-4 (pred+sdv)`` + dfd2?``4-10 (pred+sdv)``
+
+let dfd3 = 
+  dfd2 
+  |> Frame.addCol "Total" (Series.mapValues int tad)
+  |> Frame.addCol "Total (-sdv)" (Series.mapValues int tld)
+  |> Frame.addCol "Total (+sdv)" (Series.mapValues int thd)
+
+dfd3
+(*** include-it:d8 ***) 
+(**
+Now that we have the error ranges, we can again draw a chart showing our estimate alongside
+with our estimated error ranges. 
+*)
+(*** define-output:d9 ***)
+let dfd3nice = dfd3 |> Frame.skip 1
+[ dfd3nice?``Total (-sdv)`` |> Series.mapKeys DateTime.Parse 
+  dfd3nice?``Total (+sdv)`` |> Series.mapKeys DateTime.Parse
+  dfd3nice?Total |> Series.mapKeys DateTime.Parse ]
+|> Chart.Line
+|> Chart.WithOptions(Options(curveType="function", 
+    colors=[|"#c0c0c0"; "#c0c0c0"; "#1f77b4"|]))
+|> Chart.WithSize (800, 400)
+|> FormattedChart
+(*** include-it:d9 ***) 
+(**
+# The story in two charts
+The following shows (again) the two most important charts - the total number of fundraisers
+started and the total amount of money donated (per week). It is again worth noting that the
+absolute values are somewhat approximate for the number of fundraisers (because our scraping
+is limited) and even more approximate for the amounts (because we can only get this data for
+some fundraisers). The trends should, however, be mostly right.
+
+*)
+(*** define-output:l1 ***)
+[ df3?``Total (-sdv)`` |> Series.mapKeys DateTime.Parse 
+  df3?``Total (+sdv)`` |> Series.mapKeys DateTime.Parse
+  df3?Total |> Series.mapKeys DateTime.Parse ]
+|> Chart.Line
+|> Chart.WithOptions(Options(curveType="function", 
+    colors=[|"#c0c0c0"; "#c0c0c0"; "#ff7f0e"|],
+    hAxis=Axis(format="dd/MM/yyyy") ))
+|> Chart.WithSize (800, 300)
+|> Chart.WithTitle("Number of fundraisers started (per week)")
+|> FormattedChart
+(*** define-output:l2 ***)
+[ dfd3nice?``Total (-sdv)`` |> Series.mapKeys DateTime.Parse 
+  dfd3nice?``Total (+sdv)`` |> Series.mapKeys DateTime.Parse
+  dfd3nice?Total |> Series.mapKeys DateTime.Parse ]
+|> Chart.Line
+|> Chart.WithOptions(Options(curveType="function", 
+    colors=[|"#c0c0c0"; "#c0c0c0"; "#1f77b4"|],
+    hAxis=Axis(format="dd/MM/yyyy") ))
+|> Chart.WithTitle("Total amount donated (per week)")
+|> Chart.WithSize (800, 300)
+|> FormattedChart
+(*** include-it:l1 ***)
+(*** include-it:l2 ***) 

@@ -410,10 +410,7 @@ whether a fundraiser has been removed (and if so, when).
 let removedSeries = 
   removed (Seq.pairwise scrapes)  
   |> Array.map (fun (k, (dt, _)) -> k, dt.ToString("yyyy-MM-dd")) 
-  |> Seq.groupBy fst
-  |> Seq.map (fun (k, vs) -> 
-    if Seq.length vs > 1 then printf "REMOVED REPEATEDLY: %A" vs
-    k, Seq.head vs)
+  |> Array.distinctBy fst
   |> series
 
 let withRemoved = merged |> Frame.addCol "Removed" removedSeries
