@@ -91,7 +91,7 @@ This will need some data processing - the key function here is `byAge`, which fi
 data and returns only fundraisers that have an age in the specified range.
 *)
 let firstScrape = DateTime.Parse "2020-05-17"
-let lastScrape = DateTime.Parse "2020-09-06"
+let lastScrape = DateTime.Parse "2020-10-04"
 
 let weeks n = TimeSpan.FromDays(7.0 * float n)
 let day n = TimeSpan.FromDays(float n)
@@ -571,3 +571,30 @@ some fundraisers). The trends should, however, be mostly right.
 |> FormattedChart
 (*** include-it:l1 ***)
 (*** include-it:l2 ***) 
+
+
+let ts = 
+  merged
+  |> Seq.countBy (fun f -> f.Raised / 100)
+  //|> Seq.filter (fun (f, c) -> f <> 0 && f < 100)
+  |> Seq.sortBy fst
+  |> series
+
+Chart.Column(ts)
+|> Chart.WithOptions(Options(hAxis=Axis(title="Amount raised (hundreds of £)"), vAxis=Axis(title="Number of fundraisers")))
+|> Chart.WithTitle("Number of fundraisers by amount raised (raising less than £10,000)")
+
+(frame [ "Count" => ts ]).SaveCsv("c:/temp/fb/hundreds.csv",keyNames=["Hundreds"])
+
+let ts' = 
+  merged
+  |> Seq.countBy (fun f -> f.Raised / 1000)
+  //|> Seq.filter (fun (f, c) -> f <> 0 && f < 100)
+  |> Seq.sortBy fst
+  |> series
+
+Chart.Column(ts')
+|> Chart.WithOptions(Options(hAxis=Axis(title="Amount raised (thousands of £)"), vAxis=Axis(title="Number of fundraisers")))
+|> Chart.WithTitle("Number of fundraisers by amount raised (raising less than £100,000)")
+
+(frame [ "Count" => ts' ]).SaveCsv("c:/temp/fb/thousands.csv",keyNames=["Thousands"])

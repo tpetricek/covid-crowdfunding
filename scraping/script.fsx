@@ -20,7 +20,9 @@ open System.IO
 //let today = DateTime.Parse "2020-07-26"
 //let today = DateTime.Parse "2020-08-09"
 //let today = DateTime.Parse "2020-08-23"
-let today = DateTime.Parse "2020-09-06"
+//let today = DateTime.Parse "2020-09-06"
+//let today = DateTime.Parse "2020-09-20"
+let today = DateTime.Parse "2020-10-04"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -228,11 +230,13 @@ let goFundSearch term country =
 let goFundDonations id = 
   let rec loop offset = seq {
     let funds = 
-      sprintf "https://gateway.gofundme.com/web-gateway/v1/feed/%s/donations?limit=100&offset=%d&sort=recent" id offset
-      |> downloadCompressed 
-      |> GoFundDonations.Parse
-    if funds.References.Donations.Length > 0 then
-      yield! funds.References.Donations
+      try
+        sprintf "https://gateway.gofundme.com/web-gateway/v1/feed/%s/donations?limit=100&offset=%d&sort=recent" id offset
+        |> downloadCompressed 
+        |> GoFundDonations.Parse |> Some
+      with _ -> None
+    if funds.IsSome && funds.Value.References.Donations.Length > 0 then
+      yield! funds.Value.References.Donations
       yield! loop (offset + 100) }
   loop 0
 
@@ -248,7 +252,8 @@ let goFundDetails (title, location) url =
     elif created.EndsWith " day ago" then today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
     elif created.EndsWith " hours ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
     elif created.EndsWith " hour ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
-    else DateTime.Parse created
+    elif created = "Just now" then today
+    else try DateTime.Parse created with e -> failwithf "Wrong date: %s" created 
   let story = doc.CssSelect(".o-campaign-story").[0].InnerText()
   let org = doc.CssSelect(".m-organization-info-content-child")
   let org = if List.length org < 2 then "", "" else org.[0].InnerText(), org.[1].InnerText()
