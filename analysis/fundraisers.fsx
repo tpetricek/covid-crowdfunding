@@ -91,7 +91,7 @@ This will need some data processing - the key function here is `byAge`, which fi
 data and returns only fundraisers that have an age in the specified range.
 *)
 let firstScrape = DateTime.Parse "2020-05-17"
-let lastScrape = DateTime.Parse "2020-10-04"
+let lastScrape = DateTime.Parse "2020-10-18"
 
 let weeks n = TimeSpan.FromDays(7.0 * float n)
 let day n = TimeSpan.FromDays(float n)
@@ -220,6 +220,9 @@ let estimatable = merged |> Array.filter (fun d ->
   d.Created >= firstScrape - weeks 10 && 
   d.Created < lastScrape - weeks 10 - day 1 )
 
+let tooNew = merged |> Array.filter (fun d ->
+  d.Created >= lastScrape - weeks 10)
+
 let estimated f ratio =
   [ for k, v in countsByAge 71 None estimatable ->
       // Calculate predicted, predicted-sdv, predicted+sdv
@@ -290,7 +293,14 @@ let df1 =
   |> Frame.mapRowKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
   |> Frame.expandAllCols 1
 
-let df2 = 
+let unks = 
+  tooNew 
+  |> Array.countBy (fun d -> d.Week) |> series 
+  |> Series.mapKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
+let df2a = 
+  frame [ "unknown" => unks ]
+
+let df2b = 
   Seq.fold (fun df c -> Frame.dropCol c df) df1
     [ for s in ["0-4 weeks"; "4-10 weeks"; ">10 weeks"] do
         yield! [s + ".Item2"; s + ".Item3" ] ]
@@ -298,7 +308,9 @@ let df2 =
       ck.Replace("(pred).Item2", "(pred-sdv)")
         .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
 
-let tt = df2?``0-4 weeks`` + df2?``4-10 weeks`` + df2?``>10 weeks``
+let df2 = df2b.Join(df2a) |> Frame.fillMissingWith 0
+
+let tt = df2?``0-4 weeks`` + df2?``4-10 weeks`` + df2?``>10 weeks`` + df2?unknown
 let ta = tt + df2?``0-4 (pred)`` + df2?``4-10 (pred)``
 let tl = tt + df2?``0-4 (pred-sdv)`` + df2?``4-10 (pred-sdv)``
 let th = tt + df2?``0-4 (pred+sdv)`` + df2?``4-10 (pred+sdv)``
@@ -370,6 +382,13 @@ let donationsByAge keys lo hi lod hid source =
   |> Seq.groupBy (fun (d, _) -> previousSunday d)
   |> Seq.map (fun (w, vs) -> w, Seq.sumBy snd vs)
   |> realign keys
+
+let tooNewDons = 
+  recent
+  |> Seq.collect (fun f -> f.Donations)
+  |> Seq.filter (fun (d, _) -> d > lastScrape - weeks 10)
+  |> Seq.groupBy (fun (d, _) -> previousSunday d)
+  |> Seq.map (fun (w, vs) -> w, Seq.sumBy snd vs)
 
 let recentKeys = 
   recent |> Seq.collect (fun d -> d.Donations) 
@@ -502,7 +521,15 @@ let dfd1 =
   |> Frame.mapRowKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
   |> Frame.expandAllCols 1
 
-let dfd2 = 
+let unkds = 
+  tooNewDons |> series 
+  |> Series.sort |> Series.rev
+  |> Series.mapKeys (fun rk -> rk.ToString("yyyy-MM-dd"))
+
+let dfd2a = 
+  frame [ "unknown" => unkds ]
+
+let dfd2b = 
   Seq.fold (fun df c -> Frame.dropCol c df) dfd1
     [ for s in ["0-4 weeks"; "4-10 weeks"; ">10 weeks"] do
         yield! [s + ".Item2"; s + ".Item3" ] ]
@@ -510,7 +537,9 @@ let dfd2 =
       ck.Replace("(pred).Item2", "(pred-sdv)")
         .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
 
-let ttd = dfd2?``0-4 weeks`` + dfd2?``4-10 weeks`` + dfd2?``>10 weeks``
+let dfd2 = df2b.Join(df2a) |> Frame.fillMissingWith 0
+
+let ttd = dfd2?``0-4 weeks`` + dfd2?``4-10 weeks`` + dfd2?``>10 weeks`` + dfd2?unknown
 let tad = ttd + dfd2?``0-4 (pred)`` + dfd2?``4-10 (pred)``
 let tld = ttd + dfd2?``0-4 (pred-sdv)`` + dfd2?``4-10 (pred-sdv)``
 let thd = ttd + dfd2?``0-4 (pred+sdv)`` + dfd2?``4-10 (pred+sdv)``
