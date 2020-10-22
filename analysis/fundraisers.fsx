@@ -537,7 +537,7 @@ let dfd2b =
       ck.Replace("(pred).Item2", "(pred-sdv)")
         .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
 
-let dfd2 = df2b.Join(df2a) |> Frame.fillMissingWith 0
+let dfd2 = dfd2b.Join(dfd2a) |> Frame.fillMissingWith 0
 
 let ttd = dfd2?``0-4 weeks`` + dfd2?``4-10 weeks`` + dfd2?``>10 weeks`` + dfd2?unknown
 let tad = ttd + dfd2?``0-4 (pred)`` + dfd2?``4-10 (pred)``
