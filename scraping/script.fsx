@@ -22,7 +22,8 @@ open System.IO
 //let today = DateTime.Parse "2020-08-23"
 //let today = DateTime.Parse "2020-09-06"
 //let today = DateTime.Parse "2020-09-20"
-let today = DateTime.Parse "2020-10-04"
+//let today = DateTime.Parse "2020-10-04"
+let today = DateTime.Parse "2020-10-18"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -254,7 +255,7 @@ let goFundDetails (title, location) url =
     elif created.EndsWith " hour ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
     elif created = "Just now" then today
     else try DateTime.Parse created with e -> failwithf "Wrong date: %s" created 
-  let story = doc.CssSelect(".o-campaign-story").[0].InnerText()
+  let story = match doc.CssSelect(".o-campaign-story") with s::_ -> s.InnerText() | _ -> ""
   let org = doc.CssSelect(".m-organization-info-content-child")
   let org = if List.length org < 2 then "", "" else org.[0].InnerText(), org.[1].InnerText()
 
@@ -443,7 +444,7 @@ let fetchJustData kvd fname =
         //printfn "\nSCRAPING: %s (%s)" f.Name f.Link
         let ch = fetchCharity f.CharityId
 
-        if (try ignore(d1.Data.Page); true with _ -> false) then
+        if (try ignore(d1.Data.Page.Relationships); true with _ -> false) then
           let sups = fetchSupporters (f.LinkPath.Substring(1)) |> Array.ofSeq
           let raised = d6.Data.Page.DonationSummary.TotalAmount.Value / 100
           yield 
