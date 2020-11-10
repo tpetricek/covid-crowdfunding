@@ -91,7 +91,7 @@ This will need some data processing - the key function here is `byAge`, which fi
 data and returns only fundraisers that have an age in the specified range.
 *)
 let firstScrape = DateTime.Parse "2020-05-17"
-let lastScrape = DateTime.Parse "2020-10-18"
+let lastScrape = DateTime.Parse "2020-11-01"
 
 let weeks n = TimeSpan.FromDays(7.0 * float n)
 let day n = TimeSpan.FromDays(float n)
@@ -308,7 +308,7 @@ let df2b =
       ck.Replace("(pred).Item2", "(pred-sdv)")
         .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
 
-let df2 = df2b.Join(df2a) |> Frame.fillMissingWith 0
+let df2 = df2b.Join(df2a) |> Frame.fillMissingWith 0 |> Frame.sortRowsByKey
 
 let tt = df2?``0-4 weeks`` + df2?``4-10 weeks`` + df2?``>10 weeks`` + df2?unknown
 let ta = tt + df2?``0-4 (pred)`` + df2?``4-10 (pred)``
@@ -537,7 +537,7 @@ let dfd2b =
       ck.Replace("(pred).Item2", "(pred-sdv)")
         .Replace("(pred).Item3", "(pred+sdv)").Replace(".Item1", ""))
 
-let dfd2 = dfd2b.Join(dfd2a) |> Frame.fillMissingWith 0
+let dfd2 = dfd2b.Join(dfd2a) |> Frame.fillMissingWith 0 |> Frame.sortRowsByKey
 
 let ttd = dfd2?``0-4 weeks`` + dfd2?``4-10 weeks`` + dfd2?``>10 weeks`` + dfd2?unknown
 let tad = ttd + dfd2?``0-4 (pred)`` + dfd2?``4-10 (pred)``
