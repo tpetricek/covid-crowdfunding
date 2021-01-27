@@ -25,7 +25,12 @@ open System.IO
 //let today = DateTime.Parse "2020-10-04"
 //let today = DateTime.Parse "2020-10-18"
 //let today = DateTime.Parse "2020-11-01"
-let today = DateTime.Parse "2020-11-15"
+//let today = DateTime.Parse "2020-11-15"
+//let today = DateTime.Parse "2020-11-29"
+//let today = DateTime.Parse "2020-12-13"
+//let today = DateTime.Parse "2020-12-27"
+//let today = DateTime.Parse "2021-01-10"
+let today = DateTime.Parse "2021-01-24"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -269,7 +274,7 @@ let goFundDetails (title, location) url =
   let raised, target = 
     if l2 = "raised" then intp l1, -1
     elif l2 = "goal" then 0, intp l1
-    else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", ""))
+    else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", "").Replace(" target", ""))
 
   let id = url.Replace("https://www.gofundme.com/f/", "")
   let dons, mrd, doncnt, donsum = 
@@ -459,7 +464,7 @@ let fetchJustData kvd fname =
               CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
               MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString("yyyy-MM-dd")) |> Option.defaultValue "" with _ -> ""
               Raised = raised
-              Target = d6.Data.Page.TargetWithCurrency.Value / 100
+              Target = try d6.Data.Page.TargetWithCurrency.Value / 100 with e -> if e.Message.Contains "got 100000000000" then 1000000000 else reraise()
               //Owner = d5.Data.Page.Owner.Name 
               Created = d6.Data.Page.CreateDate.ToString("yyyy-MM-dd")
               DonationDetailCount = sups |> Seq.length
@@ -490,4 +495,5 @@ while not finished do
     finished <- true
   with _ -> 
     ()
+
 

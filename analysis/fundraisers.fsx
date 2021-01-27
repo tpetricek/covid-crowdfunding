@@ -75,7 +75,7 @@ are done on Sundays.
 *)
 (*** define-output:f1 ***)
 merged 
-|> Array.filter (fun d -> d.Created.Year = 2020 && d.Created.Month > 2)
+|> Array.filter (fun d -> d.Created.Year > 2020 || (d.Created.Year = 2020 && d.Created.Month > 2))
 |> Array.countBy (fun d -> d.Week)
 |> Chart.Column
 (*** include-it:f1 ***)
@@ -91,7 +91,7 @@ This will need some data processing - the key function here is `byAge`, which fi
 data and returns only fundraisers that have an age in the specified range.
 *)
 let firstScrape = DateTime.Parse "2020-05-17"
-let lastScrape = DateTime.Parse "2020-11-15"
+let lastScrape = DateTime.Parse "2021-01-24"
 
 let weeks n = TimeSpan.FromDays(7.0 * float n)
 let day n = TimeSpan.FromDays(float n)
@@ -129,7 +129,7 @@ because we do not yet know their kind (there has not been enough time to tell).
 *)
 (*** define-output:f2 ***)
 let recent = merged |> Array.filter (fun d -> 
-  d.Created.Year = 2020 && d.Created.Month > 2)
+  d.Created.Year > 2020 || (d.Created.Year = 2020 && d.Created.Month > 2))
 
 [ countsByAge 0 (Some 28) recent 
   countsByAge 29 (Some 70) recent 
@@ -360,7 +360,7 @@ for March and April are only those for long-lived fundraisers.
 (*** define-output:d1 ***) 
 merged 
 |> Seq.collect (fun f -> f.Donations)
-|> Seq.filter (fun (d, _) -> d.Year = 2020 && d.Month > 2)
+|> Seq.filter (fun (d, _) -> d.Year > 2020 || (d.Year = 2020 && d.Month > 2))
 |> Seq.groupBy (fun (d, _) -> previousSunday d)
 |> Seq.map (fun (w, vs) -> w, Seq.sumBy snd vs)
 |> Chart.Column

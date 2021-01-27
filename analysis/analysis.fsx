@@ -26,7 +26,8 @@ let scrapes =
   [ "2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"
     "2020-07-12"; "2020-07-26"; "2020-08-09"; "2020-08-23"
     "2020-09-06"; "2020-09-20"; "2020-10-04"; "2020-10-18"
-    "2020-11-01"; "2020-11-15" ]
+    "2020-11-01"; "2020-11-15"; "2020-11-29"; "2020-12-13"
+    "2020-12-27"; "2021-01-10"; "2021-01-24" ]
 
 let mergeFiles (files:seq<string * string>) = 
   let res = Dictionary<_, _>()
@@ -238,7 +239,7 @@ week).
 *)
 (*** define-output:cw1 ***)
 clean
-|> Array.filter (fun d -> d.Created.Year = 2020)
+|> Array.filter (fun d -> d.Created.Year >= 2020)
 |> Array.countBy (fun d -> previousMonday d.Created)
 |> Array.sortBy fst
 |> Chart.Column
@@ -253,7 +254,7 @@ The following chart shows the total amounts donated during individual weeks of
 (*** define-output:cw2 ***)
 clean
 |> Array.collect (fun d -> d.Donations)
-|> Array.filter (fun (d, _) -> d.Year = 2020)
+|> Array.filter (fun (d, _) -> d.Year >= 2020)
 |> Array.groupBy (fun (d, _) -> previousMonday d)
 |> Array.map (fun (d, g) -> d, Seq.sumBy snd g)
 |> Array.sortBy fst
@@ -281,7 +282,7 @@ when we look only at donations of GBP 20 and less:
 clean
 |> Array.collect (fun d -> d.Donations)
 |> Array.filter (fun (_, v) -> v <= 20)
-|> Array.filter (fun (d, _) -> d.Year = 2020)
+|> Array.filter (fun (d, _) -> d.Year >= 2020)
 |> Array.groupBy (fun (d, _) -> previousMonday d)
 |> Array.map (fun (d, g) -> d, Seq.sumBy snd g)
 |> Array.sortBy fst
@@ -294,7 +295,7 @@ And this is what we get when we look only at donations larger than GBP 20:
 clean
 |> Array.collect (fun d -> d.Donations)
 |> Array.filter (fun (_, v) -> v > 20)
-|> Array.filter (fun (d, _) -> d.Year = 2020)
+|> Array.filter (fun (d, _) -> d.Year >= 2020)
 |> Array.groupBy (fun (d, _) -> previousMonday d)
 |> Array.map (fun (d, g) -> d, Seq.sumBy snd g)
 |> Array.sortBy fst
@@ -457,7 +458,7 @@ we only look at those created 4 weeks before our last scrape (because we cannot 
 say which of those will be removed in the next scrape).
 *)
 let shortDays = 7*4
-let shortEnd = DateTime(2020, 6, 1)
+let shortEnd = DateTime(2021, 1, 24).AddDays(-4.*7.)
 
 let shortLived = 
   [ for row in withRemoved.Rows.Values do
@@ -527,8 +528,7 @@ weeks for which we have enough data:
 (*** define-output:estsl5 ***)
 let lc = 
   longLived 
-  |> Seq.filter (fun (dt, _) -> dt.Year = 2020)
-  |> Seq.filter (fun (dt, _) -> (dt.Month = 4 && dt.Day >= 19) || dt.Month = 5)
+  |> Seq.filter (fun (dt, _) -> dt > DateTime(2020, 4, 19))
   |> Seq.countBy fst |> Seq.sortBy fst
 lc |> Chart.Column
 (*** include-it:estsl5 ***)
