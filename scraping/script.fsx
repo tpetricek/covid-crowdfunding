@@ -30,7 +30,9 @@ open System.IO
 //let today = DateTime.Parse "2020-12-13"
 //let today = DateTime.Parse "2020-12-27"
 //let today = DateTime.Parse "2021-01-10"
-let today = DateTime.Parse "2021-01-24"
+//let today = DateTime.Parse "2021-01-24"
+//let today = DateTime.Parse "2021-02-07"
+let today = DateTime.Parse "2021-02-21"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -249,7 +251,7 @@ let goFundDonations id =
   loop 0
 
 let goFundDetails (title, location) url = 
-  let doc = try downloadCompressed url |> HtmlDocument.Parse |> Some with :? System.Net.WebException -> None
+  let doc = try downloadCompressed url |> HtmlDocument.Parse |> Some with :? System.Net.WebException as e -> printfn "Failed: %A" e; None
   match doc with 
   | None -> None
   | Some doc ->
@@ -276,7 +278,7 @@ let goFundDetails (title, location) url =
     elif l2 = "goal" then 0, intp l1
     else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", "").Replace(" target", ""))
 
-  let id = url.Replace("https://www.gofundme.com/f/", "")
+  let id = url.Replace("https://www.gofundme.com/f/", "").Replace("https://uk.gofundme.com/f/", "")
   let dons, mrd, doncnt, donsum = 
     try
       let dons = goFundDonations id |> Array.ofSeq
@@ -449,7 +451,7 @@ let fetchJustData kvd fname =
         //let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //printfn "\nSCRAPING: %s (%s)" f.Name f.Link
-        let ch = fetchCharity f.CharityId
+        let ch = try Some(fetchCharity f.CharityId) with _ -> None
 
         if (try ignore(d1.Data.Page.Relationships); true with _ -> false) then
           let sups = fetchSupporters (f.LinkPath.Substring(1)) |> Array.ofSeq
@@ -459,12 +461,14 @@ let fetchJustData kvd fname =
               Link = f.Link
               CharityName = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].Name
               CharityId = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].RegistrationNumber
-              CharityAddress = try [ for k, v in ch.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
-              CharityAreaOfOperation = try ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
-              CharityAreaOfBenefit = try ch.AreaOfBenefit with _ -> ""
+              CharityAddress = try [ for k, v in ch.Value.Address.JsonValue.Properties() do if not (String.IsNullOrWhiteSpace(v.AsString())) then yield v.AsString().Trim() ] |> String.concat ", " with _ -> ""
+              CharityAreaOfOperation = try ch.Value.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " with _ -> ""
+              CharityAreaOfBenefit = try ch.Value.AreaOfBenefit with _ -> ""
               MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString("yyyy-MM-dd")) |> Option.defaultValue "" with _ -> ""
               Raised = raised
-              Target = try d6.Data.Page.TargetWithCurrency.Value / 100 with e -> if e.Message.Contains "got 100000000000" then 1000000000 else reraise()
+              Target = try d6.Data.Page.TargetWithCurrency.Value / 100 with e -> 
+                if e.Message.Contains "got 100000000000" then 1000000000 else 
+                  if e.Message.Contains "got 41000000000" then 410000000 else reraise() 
               //Owner = d5.Data.Page.Owner.Name 
               Created = d6.Data.Page.CreateDate.ToString("yyyy-MM-dd")
               DonationDetailCount = sups |> Seq.length
