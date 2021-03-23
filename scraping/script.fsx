@@ -32,7 +32,9 @@ open System.IO
 //let today = DateTime.Parse "2021-01-10"
 //let today = DateTime.Parse "2021-01-24"
 //let today = DateTime.Parse "2021-02-07"
-let today = DateTime.Parse "2021-02-21"
+//let today = DateTime.Parse "2021-02-21"
+//let today = DateTime.Parse "2021-03-07"
+let today = DateTime.Parse "2021-03-21"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -59,15 +61,22 @@ let downloadCompressedHash (url:string) =
   File.ReadAllText(fn)
 
 let downloadCompressed (url:string) = 
-  let fn = temp + "/" + HttpUtility.UrlEncode(url)
-  if not (File.Exists(fn)) then 
-    printfn "Downloading: %s" url
-    let req = HttpWebRequest.Create(url) :?> HttpWebRequest
-    req.AutomaticDecompression <- DecompressionMethods.Deflate ||| DecompressionMethods.GZip
-    use resp = req.GetResponse()
-    use sr = new StreamReader(resp.GetResponseStream())
-    File.WriteAllText(fn, sr.ReadToEnd())
-  File.ReadAllText(fn)
+  let rec loop sleep = 
+    let fn = temp + "/" + HttpUtility.UrlEncode(url)
+    try
+      if not (File.Exists(fn)) then 
+        printfn "Downloading: %s" url
+        let req = HttpWebRequest.Create(url) :?> HttpWebRequest
+        req.AutomaticDecompression <- DecompressionMethods.Deflate ||| DecompressionMethods.GZip
+        use resp = req.GetResponse()
+        use sr = new StreamReader(resp.GetResponseStream())
+        File.WriteAllText(fn, sr.ReadToEnd())
+      File.ReadAllText(fn)
+    with :? System.Net.WebException as e when e.Message.Contains("Too Many Requests") ->
+      printfn "Too many requests. Sleeping: %d sec" sleep
+      System.Threading.Thread.Sleep(sleep * 1000)
+      loop (sleep * 2)
+  loop 1
 
 // --------------------------------------------------------------------------------------
 // Charity search
@@ -435,7 +444,8 @@ let fetchJustData kvd fname =
 
   let all = 
     [ for i, f in Seq.indexed uk do
-        printfn "%d/%d (%s)" i (Seq.length uk) f.Link
+       printfn "%d/%d (%s)" i (Seq.length uk) f.Link
+       if f.Link <> "https://www.justgiving.com/Portraitsbyhercule" then
         let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         let d2 = JustDetails2.Parse(downloadCompressedHash (q2.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let d3 = JustDetails3.Parse(downloadCompressedHash (q3.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
@@ -466,8 +476,9 @@ let fetchJustData kvd fname =
               CharityAreaOfBenefit = try ch.Value.AreaOfBenefit with _ -> ""
               MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString("yyyy-MM-dd")) |> Option.defaultValue "" with _ -> ""
               Raised = raised
-              Target = try d6.Data.Page.TargetWithCurrency.Value / 100 with e -> 
-                if e.Message.Contains "got 100000000000" then 1000000000 else 
+              Target = try d6.Data.Page.TargetWithCurrency.Value / 100 with e ->
+                  if e.Message.Contains "got 100000000000" then 1000000000 else 
+                  if e.Message.Contains "got 10000000000" then 100000000 else               
                   if e.Message.Contains "got 41000000000" then 410000000 else reraise() 
               //Owner = d5.Data.Page.Owner.Name 
               Created = d6.Data.Page.CreateDate.ToString("yyyy-MM-dd")

@@ -47,7 +47,7 @@ let files =
   [ for s in ["gofundme"; "just"; "virgin"] do
     for d in scrapes do 
     for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-    yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
+    yield s, sprintfn "../outputs/%s/%s_%s.csv" d s k ]
 
 let merged = mergeFiles files
 (**
@@ -318,7 +318,7 @@ let rowsAt d =
   let files = 
     [ for s in ["gofundme"; "just"; "virgin"] do
       for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-      yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
+      yield s, sprintfn "../outputs/%s/%s_%s.csv" d s k ]
   (mergeFiles files).Rows.Values
 
 let removed datePairs = 
