@@ -28,7 +28,7 @@ let scrapes =
     "2020-09-06"; "2020-09-20"; "2020-10-04"; "2020-10-18"
     "2020-11-01"; "2020-11-15"; "2020-11-29"; "2020-12-13"
     "2020-12-27"; "2021-01-10"; "2021-01-24"; "2021-02-07"
-    "2021-02-21" ]
+    "2021-02-21"; "2021-03-07"; "2021-03-21" ]
 
 let mergeFiles (files:seq<string * string>) = 
   let res = Dictionary<_, _>()
@@ -47,7 +47,7 @@ let files =
   [ for s in ["gofundme"; "just"; "virgin"] do
     for d in scrapes do 
     for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-    yield s, sprintfn "../outputs/%s/%s_%s.csv" d s k ]
+    yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
 
 let merged = mergeFiles files
 (**
@@ -318,7 +318,7 @@ let rowsAt d =
   let files = 
     [ for s in ["gofundme"; "just"; "virgin"] do
       for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-      yield s, sprintfn "../outputs/%s/%s_%s.csv" d s k ]
+      yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
   (mergeFiles files).Rows.Values
 
 let removed datePairs = 
