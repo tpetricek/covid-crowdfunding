@@ -91,7 +91,7 @@ This will need some data processing - the key function here is `byAge`, which fi
 data and returns only fundraisers that have an age in the specified range.
 *)
 let firstScrape = DateTime.Parse "2020-05-17"
-let lastScrape = DateTime.Parse "2021-03-21"
+let lastScrape = DateTime.Parse "2021-07-25"
 
 let weeks n = TimeSpan.FromDays(7.0 * float n)
 let day n = TimeSpan.FromDays(float n)

@@ -28,8 +28,10 @@ let scrapes =
     "2020-09-06"; "2020-09-20"; "2020-10-04"; "2020-10-18"
     "2020-11-01"; "2020-11-15"; "2020-11-29"; "2020-12-13"
     "2020-12-27"; "2021-01-10"; "2021-01-24"; "2021-02-07"
-    "2021-02-21"; "2021-03-07"; "2021-03-21" ]
-
+    "2021-02-21"; "2021-03-07"; "2021-03-21"; "2021-04-04"
+    "2021-04-18"; "2021-05-02"; "2021-05-16"; "2021-05-30"
+    "2021-06-13"; "2021-06-27"; "2021-07-11"; "2021-07-25" ]
+    
 let mergeFiles (files:seq<string * string>) = 
   let res = Dictionary<_, _>()
   for s, f in files do
@@ -49,7 +51,13 @@ let files =
     for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
     yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
 
-let merged = mergeFiles files
+let filesExist = 
+  [ for s, f in files do
+      if not (IO.File.Exists(f)) then 
+        printfn "File does not exist: %s" f
+      else yield s, f ]
+
+let merged = mergeFiles filesExist
 (**
 # Individual donations
 
@@ -318,7 +326,9 @@ let rowsAt d =
   let files = 
     [ for s in ["gofundme"; "just"; "virgin"] do
       for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
-      yield s, sprintf "../outputs/%s/%s_%s.csv" d s k ]
+      let fn = sprintf "../outputs/%s/%s_%s.csv" d s k
+      if IO.File.Exists fn then
+        yield s, fn ]
   (mergeFiles files).Rows.Values
 
 let removed datePairs = 

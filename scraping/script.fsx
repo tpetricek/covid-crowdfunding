@@ -34,7 +34,16 @@ open System.IO
 //let today = DateTime.Parse "2021-02-07"
 //let today = DateTime.Parse "2021-02-21"
 //let today = DateTime.Parse "2021-03-07"
-let today = DateTime.Parse "2021-03-21"
+//let today = DateTime.Parse "2021-03-21"
+//let today = DateTime.Parse "2021-04-04"
+//let today = DateTime.Parse "2021-04-18"
+//let today = DateTime.Parse "2021-05-02"
+//let today = DateTime.Parse "2021-05-16"
+//let today = DateTime.Parse "2021-05-30"
+//let today = DateTime.Parse "2021-06-13"
+//let today = DateTime.Parse "2021-06-27"
+//let today = DateTime.Parse "2021-07-11"
+let today = DateTime.Parse "2021-07-25"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -49,7 +58,7 @@ let sha256 (s:string) =
   use sha = new System.Security.Cryptography.SHA256Managed()
   Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(s))).Replace("/","_")
 
-let downloadCompressedHash (url:string) = 
+let rec downloadCompressedHash (url:string) = 
   let fn = temp + "/" + (sha256 url)
   if not (File.Exists(fn)) then 
     printfn "Downloading: %s" url
@@ -58,7 +67,13 @@ let downloadCompressedHash (url:string) =
     use resp = req.GetResponse()
     use sr = new StreamReader(resp.GetResponseStream())
     File.WriteAllText(fn, sr.ReadToEnd())
-  File.ReadAllText(fn)
+  let res = File.ReadAllText(fn)
+  if res.[0] = '\000' then 
+    printfn "RETRYING %s - got data with zero bytes" url
+    System.Threading.Thread.Sleep(1000)
+    File.Delete(fn)
+    downloadCompressedHash url
+  else res 
 
 let downloadCompressed (url:string) = 
   let rec loop sleep = 
@@ -82,20 +97,24 @@ let downloadCompressed (url:string) =
 // Charity search
 // --------------------------------------------------------------------------------------
 
-type CharitySearch = WsdlService<"https://apps.charitycommission.gov.uk/Showcharity/API/SearchCharitiesV1/SearchCharitiesV1.asmx">
+//type CharitySearch = WsdlService<"https://apps.charitycommission.gov.uk/Showcharity/API/SearchCharitiesV1/SearchCharitiesV1.asmx">
 type FetchCharity = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/charity.json")>
 
-let chs = CharitySearch.GetSearchCharitiesV1Soap()
+//let chs = CharitySearch.GetSearchCharitiesV1Soap()
 
 let fetchCharity id =   
   let fn = temp + "/charity-" + string id + ".json"
   if not (File.Exists(fn)) then 
+    (*
     let ch = chs.GetCharityByRegisteredCharityNumber("cf92136a-f3c7-4be1-a", id)
     let js = JsonSerializer.Create()
     let sw = new StringWriter()
     js.Serialize(sw, ch)
     File.WriteAllText(fn, sw.ToString())
-  File.ReadAllText(fn) |> FetchCharity.Parse
+    *)
+    None
+  else
+    File.ReadAllText(fn) |> FetchCharity.Parse |> Some
   
 // --------------------------------------------------------------------------------------
 // Virgin scraping
@@ -161,9 +180,10 @@ let fetchVirginData kvd fname =
 
   for f in downloadVirginFundraisers kvd 0 do 
     let p = virginFundraiserDetail f.DisplayPageUrl
+    printfn "Virgin: %s Got: %A" f.DisplayPageUrl p
     match virginFundraiserDetail f.DisplayPageUrl with 
     | Some 
-        ( ByTagAndId ("input", "fundraiserPageActivityId") pageid & 
+        ( ( ByTagAndId ("input", "fundraiserPageActivityId") pageid | ByTagAndId ("input", "fundraiserActivityId") pageid) & 
           ByTagAndId ("input", "totalDonationInputHidden") don ) ->
         let raised = don.Attribute("value").Value() |> float
         let dons = virginDonations (int (pageid.AttributeValue("value"))) |> Array.ofSeq
@@ -203,9 +223,9 @@ let fetchVirginData kvd fname =
           Charity = n
           Created (* First donation.. *) = if Seq.isEmpty dates then "" else (Seq.min dates).ToString("yyyy-MM-dd")
           MostRecentDonation = if Seq.isEmpty dates then "" else (Seq.max dates).ToString("yyyy-MM-dd")
-          Operates = ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", "
-          Postcode = ch.Address.Postcode
-          Activities = ch.Activities
+          Operates = match ch with Some ch -> ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " | _ -> ""
+          Postcode = match ch with Some ch -> ch.Address.Postcode | _ -> ""
+          Activities = match ch with Some ch -> ch.Activities | _ -> ""
           Description = desc.Replace("\r", " ").Replace("\n", " ")
           Complete = int raised = (dons |> Seq.choose (fun d -> try Some(int d.GrossAmount) with _ -> None) |> Seq.sum)
           Donations = dons |> Array.choose (fun d -> try Some (sprintf "%s %d" ((toDateTime d.DonationDatetime).ToString("yyyy-MM-dd")) d.GrossAmount) with _ -> None)  |> String.concat "/"
@@ -229,20 +249,29 @@ let doitVirgin () =
 type GoFundDonations = JsonProvider<const(__SOURCE_DIRECTORY__ + "/samples/gofund-donations.json")>
 
 let goFundSearchPage page term country = 
-  let raw = 
+  let url = 
     sprintf "https://www.gofundme.com/mvc.php?route=homepage_norma/load_more&page=%d&term=%s&country=%s&postalCode=&locationText="
-      page term country |> downloadCompressed
+      page term country 
+  let raw = url |> downloadCompressed
   HtmlDocument.Parse("<html><body>" + raw + "</body></html>")
 
 let goFundSearch term country = 
   let rec loop p = seq {
     let doc = goFundSearchPage p term country
+    let camps = doc.CssSelect(".fund_tile_card_link")  
+    for campaign in camps do
+      let title = campaign.CssSelect(".fund-title").[0].InnerText()
+      let url = campaign.CssSelect("a").[0].Attribute("href").Value()
+      let location = campaign.CssSelect(".fund-location").[0].InnerText()
+      yield title, url, location
+(*
     let camps = doc.CssSelect(".react-campaign-tile")  
     for campaign in camps do
       let title = campaign.CssSelect(".fund-title").[0].InnerText()
       let url = campaign.CssSelect("a").[0].Attribute("href").Value()
       let location = campaign.CssSelect(".fund-location").[0].InnerText()
       yield title, url, location
+      *)
     if camps.Length > 0 then yield! loop (p+1) }
   loop 1
 
@@ -278,14 +307,29 @@ let goFundDetails (title, location) url =
   let org = if List.length org < 2 then "", "" else org.[0].InnerText(), org.[1].InnerText()
 
   let prog = doc.CssSelect(".m-progress-meter-heading")
-  let l1 = prog.[0].DirectInnerText()
-  let l2 = prog.CssSelect("span").[0].DirectInnerText()
+  let l1, l2 = 
+    if prog = [] then 
+      let prog = doc.CssSelect(".m-progress-meter-heading--exp")
+      prog.[0].CssSelect("div").[0].DirectInnerText(),
+      prog.[0].CssSelect("div span").[0].DirectInnerText()
+    else
+      prog.CssSelect("span").[0].DirectInnerText(),
+      prog.[0].DirectInnerText()
+
   if l1.Contains "€" || l2.Contains "€" || l1.Contains "$" || l2.Contains "$" then None else // Ignore dollars (and euros...)
   let intp (s:string) = int (s.Replace("£", "").Replace(",",""))
   let raised, target = 
-    if l2 = "raised" then intp l1, -1
-    elif l2 = "goal" then 0, intp l1
-    else intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", "").Replace(" target", ""))
+    try 
+      if l2.Trim() = "raised" then intp l1, -1
+      elif l1.Trim() = "raised" then intp l2, -1
+      elif l2.Trim() = "goal" then 0, intp l1
+      elif l1.Trim() = "goal" then 0, intp l2
+      elif l1.Contains("raised of") && l1.Contains("goal") then 
+        intp (l1.Replace("raised of ", "").Replace(" goal", "")), intp l2
+      else 
+        intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", "").Replace(" target", ""))
+    with e ->
+      failwithf "Faied to parse raised: %s | %s" l1 l2
 
   let id = url.Replace("https://www.gofundme.com/f/", "").Replace("https://uk.gofundme.com/f/", "")
   let dons, mrd, doncnt, donsum = 
@@ -445,6 +489,8 @@ let fetchJustData kvd fname =
   let all = 
     [ for i, f in Seq.indexed uk do
        printfn "%d/%d (%s)" i (Seq.length uk) f.Link
+       let d1s = downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1)))
+       //printfn "%s" (d1s.Substring(0, 10))
        if f.Link <> "https://www.justgiving.com/Portraitsbyhercule" then
         let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         let d2 = JustDetails2.Parse(downloadCompressedHash (q2.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
@@ -461,7 +507,7 @@ let fetchJustData kvd fname =
         //let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //printfn "\nSCRAPING: %s (%s)" f.Name f.Link
-        let ch = try Some(fetchCharity f.CharityId) with _ -> None
+        let ch = try fetchCharity f.CharityId with _ -> None
 
         if (try ignore(d1.Data.Page.Relationships); true with _ -> false) then
           let sups = fetchSupporters (f.LinkPath.Substring(1)) |> Array.ofSeq
@@ -476,10 +522,10 @@ let fetchJustData kvd fname =
               CharityAreaOfBenefit = try ch.Value.AreaOfBenefit with _ -> ""
               MostRecentDonation = try d2.Data.Page.Donations.Edges |> Seq.tryHead |> Option.map (fun d -> d.Node.CreationDate.ToString("yyyy-MM-dd")) |> Option.defaultValue "" with _ -> ""
               Raised = raised
-              Target = try d6.Data.Page.TargetWithCurrency.Value / 100 with e ->
-                  if e.Message.Contains "got 100000000000" then 1000000000 else 
-                  if e.Message.Contains "got 10000000000" then 100000000 else               
-                  if e.Message.Contains "got 41000000000" then 410000000 else reraise() 
+              Target = 
+                try d6.Data.Page.TargetWithCurrency.Value / 100 with e ->
+                  let r = d6.Data.Page.TargetWithCurrency.JsonValue.["value"].AsDecimal()
+                  int (r / 100M)
               //Owner = d5.Data.Page.Owner.Name 
               Created = d6.Data.Page.CreateDate.ToString("yyyy-MM-dd")
               DonationDetailCount = sups |> Seq.length
@@ -505,10 +551,8 @@ let mutable finished = false
 while not finished do
   try
     doitVirgin ()
-    doitGoFundMe () 
+    doitGoFundMe ()
     doitJust ()
     finished <- true
-  with _ -> 
+  with _ ->
     ()
-
-
