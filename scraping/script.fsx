@@ -43,7 +43,12 @@ open System.IO
 //let today = DateTime.Parse "2021-06-13"
 //let today = DateTime.Parse "2021-06-27"
 //let today = DateTime.Parse "2021-07-11"
-let today = DateTime.Parse "2021-07-25"
+//let today = DateTime.Parse "2021-07-25"
+//let today = DateTime.Parse "2021-08-08"
+//let today = DateTime.Parse "2021-08-22"
+//let today = DateTime.Parse "2021-09-05"
+//let today = DateTime.Parse "2021-09-20"
+let today = DateTime.Parse "2021-10-03"
 
 let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
 let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
@@ -205,12 +210,17 @@ let fetchVirginData kvd fname =
         //printfn "ACTIVITIES: %s" ch.Activities
 
         let vch = virginCharityDetail id
+        printfn "%d" id
         let desc = 
-          [ for p in vch.CssSelect("#vm-create-event-homepage60-col1 p") |> Seq.tail -> p.InnerText() ]
-          |> String.concat "\n"
+          try
+            [ for p in vch.CssSelect("#vm-create-event-homepage60-col1 p") |> Seq.tail -> p.InnerText() ]
+            |> String.concat "\n"
+          with _ -> 
+            [ for p in vch.CssSelect("#charityHomePageDetails p") -> p.InnerText() ]
+            |> String.concat "\n"
 
         let addr = 
-          vch.CssSelect(".side-panel-no-bg p") |> Seq.pick (fun p ->
+          vch.CssSelect(".side-panel-no-bg p") |> Seq.tryPick (fun p ->
           if p.InnerText().Contains("Registered address") then Some(p.DirectInnerText().Trim().Replace("\n"," ").Replace("\r"," ")) 
           else None)
 
@@ -229,7 +239,7 @@ let fetchVirginData kvd fname =
           Description = desc.Replace("\r", " ").Replace("\n", " ")
           Complete = int raised = (dons |> Seq.choose (fun d -> try Some(int d.GrossAmount) with _ -> None) |> Seq.sum)
           Donations = dons |> Array.choose (fun d -> try Some (sprintf "%s %d" ((toDateTime d.DonationDatetime).ToString("yyyy-MM-dd")) d.GrossAmount) with _ -> None)  |> String.concat "/"
-          Address = addr |} |> fundraisers.Add
+          Address = defaultArg addr "" |} |> fundraisers.Add
     | _ -> ()
 
   let df = Frame.ofRecords fundraisers
@@ -529,7 +539,10 @@ let fetchJustData kvd fname =
               //Owner = d5.Data.Page.Owner.Name 
               Created = d6.Data.Page.CreateDate.ToString("yyyy-MM-dd")
               DonationDetailCount = sups |> Seq.length
-              DonationCount = d6.Data.Page.DonationSummary.DonationCount
+              DonationCount = 
+                if raised = 0 then 0 
+                elif d6.Data.Page.DonationSummary.JsonValue.["donationCount"] = JsonValue.Null then 0 
+                else try d6.Data.Page.DonationSummary.DonationCount with _ -> failwithf "%A" d6.Data.Page.DonationSummary
               Complete = int raised = (sups |> Seq.choose (fun d -> try Some(int d.Amount.Value / 100) with _ -> None) |> Seq.sum)
               Donations = 
                 sups |> Array.choose (fun d -> try Some(sprintf "%s %d" (d.CreationDate.ToString("yyyy-MM-dd")) (d.Amount.Value / 100)) with _ -> None)
@@ -550,8 +563,8 @@ let doitJust () =
 let mutable finished = false
 while not finished do
   try
-    doitVirgin ()
-    doitGoFundMe ()
+    //doitVirgin ()
+    //doitGoFundMe ()
     doitJust ()
     finished <- true
   with _ ->
