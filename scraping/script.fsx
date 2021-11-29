@@ -12,48 +12,31 @@ open System.Net
 open System.Web
 open System.IO
 
-//let today = DateTime.Parse "2020-05-17"
-//let today = DateTime.Parse "2020-06-01"
-//let today = DateTime.Parse "2020-06-14"
-//let today = DateTime.Parse "2020-06-29"
-//let today = DateTime.Parse "2020-07-12"
-//let today = DateTime.Parse "2020-07-26"
-//let today = DateTime.Parse "2020-08-09"
-//let today = DateTime.Parse "2020-08-23"
-//let today = DateTime.Parse "2020-09-06"
-//let today = DateTime.Parse "2020-09-20"
-//let today = DateTime.Parse "2020-10-04"
-//let today = DateTime.Parse "2020-10-18"
-//let today = DateTime.Parse "2020-11-01"
-//let today = DateTime.Parse "2020-11-15"
-//let today = DateTime.Parse "2020-11-29"
-//let today = DateTime.Parse "2020-12-13"
-//let today = DateTime.Parse "2020-12-27"
-//let today = DateTime.Parse "2021-01-10"
-//let today = DateTime.Parse "2021-01-24"
-//let today = DateTime.Parse "2021-02-07"
-//let today = DateTime.Parse "2021-02-21"
-//let today = DateTime.Parse "2021-03-07"
-//let today = DateTime.Parse "2021-03-21"
-//let today = DateTime.Parse "2021-04-04"
-//let today = DateTime.Parse "2021-04-18"
-//let today = DateTime.Parse "2021-05-02"
-//let today = DateTime.Parse "2021-05-16"
-//let today = DateTime.Parse "2021-05-30"
-//let today = DateTime.Parse "2021-06-13"
-//let today = DateTime.Parse "2021-06-27"
-//let today = DateTime.Parse "2021-07-11"
-//let today = DateTime.Parse "2021-07-25"
-//let today = DateTime.Parse "2021-08-08"
-//let today = DateTime.Parse "2021-08-22"
-//let today = DateTime.Parse "2021-09-05"
-//let today = DateTime.Parse "2021-09-20"
-let today = DateTime.Parse "2021-10-03"
 
-let temp = __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
-let outFolder = __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
-Directory.CreateDirectory(temp)
-Directory.CreateDirectory(outFolder)
+let scrapes = 
+  [ "2020-05-17"; "2020-06-01"; "2020-06-14"; "2020-06-29"; "2020-07-12"; "2020-07-26"; 
+    "2020-08-09"; "2020-08-23"; "2020-09-06"; "2020-09-20"; "2020-10-04"; "2020-10-18"; 
+    "2020-11-01"; "2020-11-15"; "2020-11-29"; "2020-12-13"; "2020-12-27"; "2021-01-10"; 
+    "2021-01-24"; "2021-02-07"; "2021-02-21"; "2021-03-07"; "2021-03-21"; "2021-04-04"; 
+    "2021-04-18"; "2021-05-02"; "2021-05-16"; "2021-05-30"; "2021-06-13"; "2021-06-27"; 
+    "2021-07-11"; "2021-07-25"; "2021-08-08"; "2021-08-22"; "2021-09-05"; "2021-09-20"; 
+    "2021-10-03"; "2021-10-17"; "2021-10-31"; "2021-11-14"; "2021-11-28" ]
+
+let mutable today = DateTime.MinValue
+let mutable temp = ""
+let mutable outFolder = ""
+let mutable doNotDownload = false
+exception DoNotDownload
+
+let setupScrape dnd date =     
+  today <- DateTime.Parse(date)
+  doNotDownload <- dnd
+  temp <- __SOURCE_DIRECTORY__ + "/../cache/" + (today.ToString("yyyy-MM-dd"))
+  outFolder <- __SOURCE_DIRECTORY__ + "/../outputs/" + (today.ToString("yyyy-MM-dd"))
+  Directory.CreateDirectory(temp) |> ignore
+  Directory.CreateDirectory(outFolder) |> ignore
+
+setupScrape false (List.last scrapes)
 
 // --------------------------------------------------------------------------------------
 // Helpers
@@ -66,6 +49,7 @@ let sha256 (s:string) =
 let rec downloadCompressedHash (url:string) = 
   let fn = temp + "/" + (sha256 url)
   if not (File.Exists(fn)) then 
+    if doNotDownload then raise(DoNotDownload)
     printfn "Downloading: %s" url
     let req = HttpWebRequest.Create(url) :?> HttpWebRequest
     req.AutomaticDecompression <- DecompressionMethods.Deflate ||| DecompressionMethods.GZip
@@ -80,11 +64,20 @@ let rec downloadCompressedHash (url:string) =
     downloadCompressedHash url
   else res 
 
+let rec downloadCompressedHashAlways url = 
+  let dnd = doNotDownload 
+  try
+    doNotDownload <- false
+    downloadCompressedHash url
+  finally
+    doNotDownload <- dnd
+
 let downloadCompressed (url:string) = 
   let rec loop sleep = 
     let fn = temp + "/" + HttpUtility.UrlEncode(url)
     try
       if not (File.Exists(fn)) then 
+        if doNotDownload then raise(DoNotDownload)
         printfn "Downloading: %s" url
         let req = HttpWebRequest.Create(url) :?> HttpWebRequest
         req.AutomaticDecompression <- DecompressionMethods.Deflate ||| DecompressionMethods.GZip
@@ -185,7 +178,7 @@ let fetchVirginData kvd fname =
 
   for f in downloadVirginFundraisers kvd 0 do 
     let p = virginFundraiserDetail f.DisplayPageUrl
-    printfn "Virgin: %s Got: %A" f.DisplayPageUrl p
+    //printfn "Virgin: %s Got: %A" f.DisplayPageUrl p
     match virginFundraiserDetail f.DisplayPageUrl with 
     | Some 
         ( ( ByTagAndId ("input", "fundraiserPageActivityId") pageid | ByTagAndId ("input", "fundraiserActivityId") pageid) & 
@@ -236,7 +229,7 @@ let fetchVirginData kvd fname =
           Operates = match ch with Some ch -> ch.AreaOfOperation |> Seq.map (fun c -> c.Trim()) |> String.concat ", " | _ -> ""
           Postcode = match ch with Some ch -> ch.Address.Postcode | _ -> ""
           Activities = match ch with Some ch -> ch.Activities | _ -> ""
-          Description = desc.Replace("\r", " ").Replace("\n", " ")
+          CharityDescription = desc.Replace("\r", " ").Replace("\n", " ")
           Complete = int raised = (dons |> Seq.choose (fun d -> try Some(int d.GrossAmount) with _ -> None) |> Seq.sum)
           Donations = dons |> Array.choose (fun d -> try Some (sprintf "%s %d" ((toDateTime d.DonationDatetime).ToString("yyyy-MM-dd")) d.GrossAmount) with _ -> None)  |> String.concat "/"
           Address = defaultArg addr "" |} |> fundraisers.Add
@@ -268,20 +261,14 @@ let goFundSearchPage page term country =
 let goFundSearch term country = 
   let rec loop p = seq {
     let doc = goFundSearchPage p term country
-    let camps = doc.CssSelect(".fund_tile_card_link")  
+    let campsOld = doc.CssSelect(".react-campaign-tile")  // Older version of the page
+    let campsNew = doc.CssSelect(".fund_tile_card_link")  
+    let camps = if campsNew = [] then campsOld else campsNew
     for campaign in camps do
       let title = campaign.CssSelect(".fund-title").[0].InnerText()
       let url = campaign.CssSelect("a").[0].Attribute("href").Value()
       let location = campaign.CssSelect(".fund-location").[0].InnerText()
       yield title, url, location
-(*
-    let camps = doc.CssSelect(".react-campaign-tile")  
-    for campaign in camps do
-      let title = campaign.CssSelect(".fund-title").[0].InnerText()
-      let url = campaign.CssSelect("a").[0].Attribute("href").Value()
-      let location = campaign.CssSelect(".fund-location").[0].InnerText()
-      yield title, url, location
-      *)
     if camps.Length > 0 then yield! loop (p+1) }
   loop 1
 
@@ -299,7 +286,12 @@ let goFundDonations id =
   loop 0
 
 let goFundDetails (title, location) url = 
-  let doc = try downloadCompressed url |> HtmlDocument.Parse |> Some with :? System.Net.WebException as e -> printfn "Failed: %A" e; None
+  let doc = 
+    try 
+      downloadCompressed url |> HtmlDocument.Parse |> Some 
+    with 
+      (:? System.Net.WebException | :? DoNotDownload) as e -> 
+        printfn "Failed: %A" e; None
   match doc with 
   | None -> None
   | Some doc ->
@@ -355,7 +347,7 @@ let goFundDetails (title, location) url =
      Link = url
      Complete = int raised = donsum
      Created = created.ToString("yyyy-MM-dd")
-     Story = story.Replace('\n', ' ').Replace('\r', ' ').Replace(',', ' ')
+     Description = story.Replace('\n', ' ').Replace('\r', ' ').Replace(',', ' ')
      Organization = fst org
      OrganizationDetails = snd org
      Raised = raised
@@ -389,7 +381,7 @@ let saveAll (all:seq<_>) file =
     "OrganizationDetails"
     "DonationCount"
     "Donations"
-    "Story"
+    "Description"
     "Complete"
     ]]
   
@@ -499,7 +491,7 @@ let fetchJustData kvd fname =
   let all = 
     [ for i, f in Seq.indexed uk do
        printfn "%d/%d (%s)" i (Seq.length uk) f.Link
-       let d1s = downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1)))
+       //let d1s = downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1)))
        //printfn "%s" (d1s.Substring(0, 10))
        if f.Link <> "https://www.justgiving.com/Portraitsbyhercule" then
         let d1 = JustDetails1.Parse(downloadCompressedHash (q1.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
@@ -514,7 +506,7 @@ let fetchJustData kvd fname =
         //let dA = JustDetailsA.Parse(downloadCompressedHash (qA.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dB = JustDetailsB.Parse(downloadCompressedHash (qB.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dC = JustDetailsC.Parse(downloadCompressedHash (qC.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
-        //let dD = JustDetailsD.Parse(downloadCompressedHash (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
+        let dD = JustDetailsD.Parse(downloadCompressedHashAlways (qD.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //let dE = JustDetailsE.Parse(downloadCompressedHash (qE.Replace("fulwood-foodbank-appeal", f.LinkPath.Substring(1))))
         //printfn "\nSCRAPING: %s (%s)" f.Name f.Link
         let ch = try fetchCharity f.CharityId with _ -> None
@@ -524,6 +516,7 @@ let fetchJustData kvd fname =
           let raised = d6.Data.Page.DonationSummary.TotalAmount.Value / 100
           yield 
            {| Title = f.Name
+              Description = dD.Data.Page.Story
               Link = f.Link
               CharityName = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].Name
               CharityId = d1.Data.Page.Relationships.Beneficiaries.Nodes.[0].RegistrationNumber
@@ -560,12 +553,23 @@ let doitJust () =
   fetchJustData "soup%20kitchen" "just_soup-kitchen"
   fetchJustData "homeless" "just_homeless"
 
+setupScrape false (List.last scrapes)
 let mutable finished = false
 while not finished do
   try
-    //doitVirgin ()
-    //doitGoFundMe ()
+    doitVirgin ()
+    doitGoFundMe ()
     doitJust ()
     finished <- true
   with _ ->
     ()
+
+
+for scrape in scrapes do 
+  setupScrape true scrape
+  printfn "Updating scrape for: %s" scrape
+  try 
+    //doitGoFundMe ()
+    //doitVirgin()  
+    doitJust()
+  with e -> printfn "Skipping with: %s" e.Message
