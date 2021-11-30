@@ -18,12 +18,17 @@ let mergeFiles (files:seq<string * string>) =
   let res = Dictionary<_, _>()
   for s, f in files do
     let df = Frame.ReadCsv(f,inferTypes=false)
+    if not (df.Columns.ContainsKey("Title")) then
+      df.AddColumn("Title", df.GetColumn<string>("Link") |> Series.map (fun _ _ -> ""))
+    if not (df.Columns.ContainsKey("Description")) then
+      df.AddColumn("Description", df.GetColumn<string>("Link") |> Series.map (fun _ _ -> ""))
+
     for r in df.Rows.Values do
       let url = r.GetAs<string>("Link")
       //if String.IsNullOrEmpty (r.GetAs<string>("Created")) then failwithf "EMpty: %s" f
       res.[url] <- 
         Series.merge (series ["Source" => box s])
-          r.[["Link"; "Created"; "MostRecentDonation"; "Donations"; "Raised"; "Complete"]] 
+          r.[["Link"; "Title"; "Description"; "Created"; "MostRecentDonation"; "Donations"; "Raised"; "Complete"]] 
   Frame.ofRows [ for (KeyValue(k,v)) in res -> k => v ]
   |> Frame.dropSparseRows
 
@@ -44,7 +49,7 @@ let merged = mergeFiles filesExist
 let rowsAt d = 
   let files = 
     [ for s in ["gofundme"; "just"; "virgin"] do
-      for k in ["foodbank"; "food-bank"; "soup-kitchen"] do
+      for k in ["foodbank"; "food-bank"; "soup-kitchen"; "homeless"] do
       let fn = sprintf "../outputs/%s/%s_%s.csv" d s k
       if IO.File.Exists fn then
         yield s, fn ]

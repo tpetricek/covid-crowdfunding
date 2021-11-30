@@ -511,7 +511,8 @@ let fetchJustData kvd fname =
         //printfn "\nSCRAPING: %s (%s)" f.Name f.Link
         let ch = try fetchCharity f.CharityId with _ -> None
 
-        if (try ignore(d1.Data.Page.Relationships); true with _ -> false) then
+        if (try ignore(d6.Data.Page.DonationSummary); 
+                ignore(d1.Data.Page.Relationships); true with _ -> false) then
           let sups = fetchSupporters (f.LinkPath.Substring(1)) |> Array.ofSeq
           let raised = d6.Data.Page.DonationSummary.TotalAmount.Value / 100
           yield 
@@ -553,12 +554,13 @@ let doitJust () =
   fetchJustData "soup%20kitchen" "just_soup-kitchen"
   fetchJustData "homeless" "just_homeless"
 
+// RUN SCRAPE
 setupScrape false (List.last scrapes)
 let mutable finished = false
 while not finished do
   try
-    doitVirgin ()
-    doitGoFundMe ()
+    //doitVirgin ()
+    //doitGoFundMe ()
     doitJust ()
     finished <- true
   with _ ->
@@ -569,7 +571,7 @@ for scrape in scrapes do
   setupScrape true scrape
   printfn "Updating scrape for: %s" scrape
   try 
-    //doitGoFundMe ()
-    //doitVirgin()  
+    doitGoFundMe ()
+    doitVirgin()  
     doitJust()
   with e -> printfn "Skipping with: %s" e.Message
