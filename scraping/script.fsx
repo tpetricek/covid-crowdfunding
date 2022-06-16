@@ -1,4 +1,3 @@
-#r "System.ServiceModel.dll"
 #load ".paket/load/net45/Deedle.fsx"
 #load ".paket/load/net45/FSharp.Data.fsx"
 #load ".paket/load/net45/FSharp.Data.TypeProviders.fsx"
@@ -20,7 +19,10 @@ let scrapes =
     "2021-01-24"; "2021-02-07"; "2021-02-21"; "2021-03-07"; "2021-03-21"; "2021-04-04"; 
     "2021-04-18"; "2021-05-02"; "2021-05-16"; "2021-05-30"; "2021-06-13"; "2021-06-27"; 
     "2021-07-11"; "2021-07-25"; "2021-08-08"; "2021-08-22"; "2021-09-05"; "2021-09-20"; 
-    "2021-10-03"; "2021-10-17"; "2021-10-31"; "2021-11-14"; "2021-11-28" ]
+    "2021-10-03"; "2021-10-17"; "2021-10-31"; "2021-11-14"; "2021-11-28"; "2021-12-12"; 
+    "2021-12-26"; "2022-01-09"; "2022-01-23"; "2022-02-06"; "2022-02-20"; "2022-03-06";
+    "2022-03-20"; "2022-04-04"; "2022-04-17"; "2022-05-01"; "2020-05-15"; // GAP
+    "2022-06-12" ]
 
 let mutable today = DateTime.MinValue
 let mutable temp = ""
@@ -296,12 +298,13 @@ let goFundDetails (title, location) url =
   | None -> None
   | Some doc ->
   if doc.CssSelect(".a-created-date").Length = 0 then None else
-  let created = doc.CssSelect(".a-created-date").[0].InnerText().Replace("Created ", "")
+  let created = doc.CssSelect(".a-created-date").[0].InnerText().Replace("Created ", "").Replace("Creata il", "")
   let created = 
     if created.EndsWith " days ago" then today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
     elif created.EndsWith " day ago" then today - TimeSpan.FromDays(float (created.Split(' ').[0])) 
     elif created.EndsWith " hours ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
     elif created.EndsWith " hour ago" then today - TimeSpan.FromHours(float (created.Split(' ').[0])) 
+    elif created.StartsWith "Criada há " then today - TimeSpan.FromHours(float (created.Split(' ').[2])) 
     elif created = "Just now" then today
     else try DateTime.Parse created with e -> failwithf "Wrong date: %s" created 
   let story = match doc.CssSelect(".o-campaign-story") with s::_ -> s.InnerText() | _ -> ""
@@ -328,6 +331,10 @@ let goFundDetails (title, location) url =
       elif l1.Trim() = "goal" then 0, intp l2
       elif l1.Contains("raised of") && l1.Contains("goal") then 
         intp (l1.Replace("raised of ", "").Replace(" goal", "")), intp l2
+      elif l1.Contains("raccolti su un obiettivo di") then 
+        intp l2, intp (l1.Replace("raccolti su un obiettivo di", ""))
+      elif l1.Contains("arrecadados da meta de") then 
+         intp l2, intp (l1.Replace("arrecadados da meta de", ""))
       else 
         intp l1, intp (l2.Replace("raised of ", "").Replace(" goal", "").Replace(" target", ""))
     with e ->
@@ -554,13 +561,14 @@ let doitJust () =
   fetchJustData "soup%20kitchen" "just_soup-kitchen"
   fetchJustData "homeless" "just_homeless"
 
+
 // RUN SCRAPE
 setupScrape false (List.last scrapes)
 let mutable finished = false
 while not finished do
   try
-    //doitVirgin ()
-    //doitGoFundMe ()
+    doitVirgin ()
+    doitGoFundMe ()
     doitJust ()
     finished <- true
   with _ ->

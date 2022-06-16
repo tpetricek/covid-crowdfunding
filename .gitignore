@@ -9,3 +9,5 @@ analysis/bin
 analysis/packages
 analysis/.fake
 analysis/.paket/paket.exe
+scraping/.paket/load
+scraping/.paket/Paket.Restore.targets
